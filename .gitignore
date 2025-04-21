@@ -1,0 +1,63 @@
+# 環境變數
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 依賴
+/node_modules
+/.pnp
+.pnp.js
+
+# 建置輸出
+/dist
+/build
+/out
+
+# 日誌檔案
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# 資料庫檔案
+/data
+
+# 快取
+.npm
+.eslintcache
+.node_repl_history
+
+# 本地專用檔案
+.DS_Store
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# 測試覆蓋率報告
+/coverage
+
+# 暫存檔案
+.tmp
+.temp
+.cache
+
+# 上傳檔案
+/public/uploads/*
+!/public/uploads/.gitkeep
+
+# 憑證與金鑰
+*.pem
+*.key
+*.crt
+
+# 擴展檔案
+*.tgz
+*.tar.gz
+*.zip
+*.7z
+*.rar 
