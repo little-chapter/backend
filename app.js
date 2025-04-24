@@ -27,7 +27,7 @@ app.get("/healthcheck", (req, res) => {
   res.status(200);
   res.send("OK");
 });
-app.use("/api/v1/users", usersRouter);
+app.use("/api/users", usersRouter);
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

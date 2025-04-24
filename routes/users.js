@@ -9,7 +9,7 @@ router.post("/sign-up", async (req, res) => {
     const { email, password } = req.body;
 
     // 驗證電子郵件格式
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!email || !emailRegex.test(email) || email.length > 255) {
       return res.status(400).json({
         status: false,
@@ -45,7 +45,7 @@ router.post("/sign-up", async (req, res) => {
       email,
       password: hashedPassword,
       role: "customer",
-      is_active: true,
+      is_active: false,
       is_admin: false,
     });
 
