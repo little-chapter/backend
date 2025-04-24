@@ -4,6 +4,8 @@ const { dataSource } = require("../db/data-source");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/secret");
+const { sendVerificationEmail } = require("../utils/mailer");
+const { generateVerificationCode } = require("../utils/codeGenerator");
 
 // 用戶註冊
 router.post("/sign-up", async (req, res) => {
@@ -39,6 +41,11 @@ router.post("/sign-up", async (req, res) => {
       });
     }
 
+    // 生成驗證碼並設定過期時間（30分鐘後）
+    const verificationCode = generateVerificationCode();
+    const codeExpiryTime = new Date();
+    codeExpiryTime.setMinutes(codeExpiryTime.getMinutes() + 30);
+
     // 加密密碼
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -49,14 +56,22 @@ router.post("/sign-up", async (req, res) => {
       role: "customer",
       is_active: false,
       is_admin: false,
+      code: verificationCode,
+      code_time: codeExpiryTime,
     });
 
     await userRepository.save(newUser);
+
+    // 發送驗證郵件
+    const emailSent = await sendVerificationEmail(email, verificationCode);
 
     // 回傳成功訊息
     res.status(201).json({
       status: true,
       message: "註冊成功，已發送驗證信至信箱",
+      data: emailSent
+        ? { email }
+        : { email, message: "驗證郵件發送失敗，請稍後使用重新發送驗證信功能" },
     });
   } catch (error) {
     console.error("Error registering user:", error);
@@ -147,6 +162,127 @@ router.post("/log-in", async (req, res) => {
     });
   } catch (error) {
     console.error("Error logging in user:", error);
+    res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 用戶驗證電子郵件
+router.get("/verify-email", async (req, res) => {
+  try {
+    const { email, code } = req.query;
+
+    if (!email || !code) {
+      return res.status(400).json({
+        status: false,
+        message: "缺少驗證資訊",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到此使用者",
+      });
+    }
+
+    if (user.is_active) {
+      return res.status(200).json({
+        status: true,
+        message: "此帳號已完成驗證",
+      });
+    }
+
+    if (!user.code || user.code !== code) {
+      return res.status(400).json({
+        status: false,
+        message: "驗證碼無效",
+      });
+    }
+
+    // 檢查驗證碼是否過期
+    const now = new Date();
+    if (user.code_time && new Date(user.code_time) < now) {
+      return res.status(400).json({
+        status: false,
+        message: "驗證碼已過期，請重新申請",
+      });
+    }
+
+    // 更新使用者狀態為已驗證
+    user.is_active = true;
+    user.code = null;
+    user.code_time = null;
+    await userRepository.save(user);
+
+    return res.status(200).json({
+      status: true,
+      message: "電子郵件驗證成功",
+    });
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 重新發送驗證郵件
+router.post("/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        status: false,
+        message: "請提供電子郵件地址",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到此使用者",
+      });
+    }
+
+    if (user.is_active) {
+      return res.status(200).json({
+        status: true,
+        message: "此帳號已完成驗證",
+      });
+    }
+
+    // 生成新的驗證碼並設定過期時間（30分鐘後）
+    const verificationCode = generateVerificationCode();
+    const codeExpiryTime = new Date();
+    codeExpiryTime.setMinutes(codeExpiryTime.getMinutes() + 30);
+
+    // 更新使用者的驗證碼
+    user.code = verificationCode;
+    user.code_time = codeExpiryTime;
+    await userRepository.save(user);
+
+    // 發送驗證郵件
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+
+    return res.status(200).json({
+      status: true,
+      message: emailSent
+        ? "驗證郵件已重新發送"
+        : "驗證郵件發送失敗，請稍後再試",
+    });
+  } catch (error) {
+    console.error("Error resending verification email:", error);
     res.status(500).json({
       status: false,
       message: "伺服器錯誤，請稍後再試",
