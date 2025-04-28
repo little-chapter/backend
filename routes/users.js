@@ -108,7 +108,18 @@ router.post("/log-in", async (req, res) => {
     const userRepository = dataSource.getRepository("User");
 
     // 檢查使用者是否存在
-    const user = await userRepository.findOne({ where: { email } });
+    const user = await userRepository.findOne({
+      where: { email },
+      select: [
+        "id",
+        "email",
+        "password",
+        "role",
+        "is_active",
+        "is_admin",
+        "name",
+      ],
+    });
     if (!user) {
       return res.status(404).json({
         status: false,
