@@ -7,6 +7,9 @@ const AgeRangeSchema = require("./entities/AgeRangeSchema");
 const CategorySchema = require("./entities/CategorySchema");
 const ProductLinkCategory = require("./entities/ProductLinkCategory");
 const ProductImages = require("./entities/ProductImageSchema");
+const ProductReview = require("./entities/ProductReviewSchema");
+const OrderItem = require("./entities/OrderItemSchema");
+const Order = require("./entities/OrderSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -24,6 +27,9 @@ const dataSource = new DataSource({
     CategorySchema,
     ProductLinkCategory,
     ProductImages,
+    ProductReview,
+    OrderItem,
+    Order,
   ],
   ssl: config.get("db.ssl"),
 });

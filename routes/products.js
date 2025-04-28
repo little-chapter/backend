@@ -223,6 +223,118 @@ router.get("/", async(req, res, next)=>{
         next(error);
     }
 })
-
+//取得商品詳細資料
+router.get("/:productId", async(req, res, next)=>{
+    try{
+        let { productId } = req.params;
+        productId = Number(productId);
+        if(!productId || isNotValidInteger(productId) || Number.isNaN(productId)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料不符合格式"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products")
+            .createQueryBuilder("products")
+            .innerJoin("AgeRanges", "ageRanges", "ageRanges.id = products.age_range_id")
+            .select([
+                "products.id AS id",
+                "products.title AS title",
+                "products.description AS description",
+                "products.price AS price",
+                "products.discount_price AS discount_price",
+                "products.stock_quantity AS stock_quantity",
+                "products.age_range_id AS age_range_id",
+                "ageRanges.name AS age_range_name",
+                "products.isbn AS isbn",
+                "products.author AS author",
+                "products.illustrator AS illustrator",
+                "products.publisher AS publisher",
+                "products.publish_date AS publish_date",
+                "products.page_count AS page_count",
+            ])
+            .where("products.id =:productId", {productId: productId})
+            .getRawOne();
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        // 取得商品圖片
+        const allImages = await dataSource.getRepository("ProductImages")
+            .createQueryBuilder("images")
+            .select([
+                "images.image_url AS image_url",
+            ])
+            .where("images.product_id =:productId", {productId: existProduct.id})
+            .orderBy("display_order")
+            .getRawMany()
+        if (allImages){
+            const productImages = allImages.map(image =>{
+                return image.image_url
+            })
+            existProduct.imageUrls = productImages;
+        }else{
+            existProduct.imageUrls = null;
+        }
+        //取得商品關聯主題
+        const categories = await dataSource.getRepository("ProductLinkCategory")
+            .createQueryBuilder("plc")
+            .innerJoin("Categories", "categories", "categories.id = plc.category_id")
+            .select([
+                "categories.id AS id",
+                "categories.name AS name",
+            ])
+            .where("plc.product_id =:productId", {productId: existProduct.id})
+            .getRawMany()
+        //取得商品評價次數 平均評價
+        let count = 0;
+        let averageRating = 0;
+        const reviews = await dataSource.getRepository("ProductReviews")
+            .createQueryBuilder("reviews")
+            .select([
+                "COUNT(reviews.id) AS count",
+                "SUM(reviews.rating) AS ratings",
+            ])
+            .where("reviews.product_id =:productId", {productId: existProduct.id})
+            .groupBy(["reviews.product_id"])
+            .getRawMany()
+        if(reviews.length !== 0){
+            count = reviews[0].count;
+            averageRating = reviews[0].ratings / count;
+        }
+        res.status(200).json({
+            status: true,
+            data: {
+                productId: existProduct.id,
+                title: existProduct.title,
+                description: existProduct.description,
+                price: existProduct.price,
+                discountPrice: existProduct.discount_price,
+                stockQuantity: existProduct.stock_quantity,
+                categoryInfo: categories,
+                ageRange: {
+                    categoryId: existProduct.age_range_id,
+                    name: existProduct.age_range_name
+                },
+                imageUrls: existProduct.imageUrls,
+                isbn: existProduct.isbn,
+                author: existProduct.author,
+                illustrator: existProduct.illustrator,
+                publisher: existProduct.publisher,
+                publishDate: existProduct.publish_date,
+                pageCount: existProduct.page_count,
+                averageRating: averageRating,
+                reviewCount: count
+            }
+        })
+    }catch(error){
+        logger.error('取得商品詳細資料錯誤:', error);
+        next(error);
+    }
+})
 
 module.exports = router;
