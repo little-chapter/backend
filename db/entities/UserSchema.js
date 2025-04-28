@@ -29,6 +29,7 @@ module.exports = new EntitySchema({
       type: "varchar",
       length: 255,
       nullable: false,
+      select: false,
     },
     phone: {
       type: "varchar",
