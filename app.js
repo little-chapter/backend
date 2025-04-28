@@ -5,6 +5,7 @@ const pinoHttp = require("pino-http");
 
 const logger = require("./utils/logger")("App");
 const usersRouter = require("./routes/users");
+const productsRouter = require("./routes/products");
 
 const app = express();
 app.use(cors());
@@ -28,13 +29,21 @@ app.get("/healthcheck", (req, res) => {
   res.send("OK");
 });
 app.use("/api/users", usersRouter);
+app.use("/api/products", productsRouter);
 
+app.use((req, res, next) =>{
+  res.status(404).json({
+    status: false,
+    message:'無此路由'
+  })
+  return
+})
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   req.log.error(err);
   res.status(500).json({
-    status: "error",
-    message: "伺服器錯誤",
+    status: false,
+    message: "伺服器錯誤，請稍後再試",
   });
 });
 
