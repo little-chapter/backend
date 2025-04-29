@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/secret");
 const { sendVerificationEmail } = require("../utils/mailer");
 const { generateVerificationCode } = require("../utils/codeGenerator");
+const { verifyToken } = require("../middlewares/auth");
 
 // 用戶註冊
 router.post("/sign-up", async (req, res) => {
@@ -295,6 +296,179 @@ router.post("/resend-verification", async (req, res) => {
   } catch (error) {
     console.error("Error resending verification email:", error);
     res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 取得使用者個人資料
+router.get("/profile", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到該用戶",
+      });
+    }
+
+    // 格式化出生日期為 YYYY-MM-DD 或返回空字串
+    const birthDate = user.birth_date
+      ? new Date(user.birth_date).toISOString().split("T")[0]
+      : "";
+
+    return res.status(200).json({
+      status: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name || "",
+          gender: user.gender || "",
+          email: user.email,
+          phone: user.phone || "",
+          birthDate: birthDate,
+          address: user.address || "",
+          avatar: user.avatar || "",
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器發生錯誤，請稍後再試",
+    });
+  }
+});
+
+// 更新使用者個人資料
+router.put("/profile", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, gender, phone, birthDate, address } = req.body;
+
+    // 驗證必填欄位
+    if (!name) {
+      return res.status(400).json({
+        status: false,
+        message: "必要欄位未填寫",
+      });
+    }
+
+    // 驗證名稱格式
+    if (typeof name !== "string" || name.trim() === "" || name.length > 50) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證性別格式
+    if (
+      gender !== undefined &&
+      gender !== "" &&
+      !["male", "female", "other"].includes(gender)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證手機格式 (台灣手機格式)
+    const phoneRegex = /^09\d{8}$/;
+    if (phone !== undefined && phone !== "" && !phoneRegex.test(phone)) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證出生日期格式
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (
+      birthDate !== undefined &&
+      birthDate !== "" &&
+      !dateRegex.test(birthDate)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證出生日期是否為未來日期或當天
+    if (birthDate !== undefined && birthDate !== "") {
+      const inputDate = new Date(birthDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // 設定為當天的00:00:00
+
+      // 檢查日期是否為未來或當天
+      if (inputDate >= today) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+    }
+
+    // 驗證地址格式
+    if (
+      address !== undefined &&
+      (typeof address !== "string" || address.length > 255)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到該用戶",
+      });
+    }
+
+    // 更新使用者資料
+    user.name = name;
+
+    // 檢查欄位是否存在於請求中
+    if (gender !== undefined) user.gender = gender;
+    if (phone !== undefined) user.phone = phone;
+    if (birthDate !== undefined) {
+      user.birth_date = birthDate ? new Date(birthDate) : null;
+    }
+    if (address !== undefined) user.address = address;
+
+    await userRepository.save(user);
+
+    // 回傳更新後的資料
+    return res.status(200).json({
+      status: true,
+      message: "個人資料更新成功",
+      data: {
+        name: user.name,
+        gender: user.gender || "",
+        phone: user.phone || "",
+        birthDate: user.birth_date
+          ? new Date(user.birth_date).toISOString().split("T")[0]
+          : "",
+        address: user.address || "",
+        avatar: user.avatar || "",
+      },
+    });
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    return res.status(500).json({
       status: false,
       message: "伺服器錯誤，請稍後再試",
     });
