@@ -55,7 +55,7 @@ module.exports = new EntitySchema({
     relations: {
         User: {
             target: 'User',
-            type: 'one-to-many',
+            type: 'many-to-one',
             joinColumn: {
                 name: 'user_id',
                 referencedColumnName: 'id',

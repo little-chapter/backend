@@ -18,7 +18,7 @@ module.exports = new EntitySchema({
     relations: {
         Products: {
             target: 'Products',
-            type: 'one-to-many',
+            type: 'many-to-one',
             joinColumn: {
                 name: 'product_id',
                 referencedColumnName: 'id',
@@ -28,7 +28,7 @@ module.exports = new EntitySchema({
         },
         Categories: {
             target: 'Categories',
-            type: 'one-to-many',
+            type: 'many-to-one',
             joinColumn: {
                 name: 'category_id',
                 referencedColumnName: 'id',
@@ -36,12 +36,5 @@ module.exports = new EntitySchema({
             },
             onDelete:'RESTRICT'
         },
-    },
-    indices: [
-        {
-            name: 'PK_product_category',
-            unique: true,
-            columns: ['product_id', 'category_id']
-        }
-    ],
+    }
 })

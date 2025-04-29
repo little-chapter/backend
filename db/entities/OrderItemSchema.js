@@ -59,7 +59,7 @@ module.exports = new EntitySchema({
     relations: {
         Products: {
             target: 'Products',
-            type: 'one-to-many',
+            type: 'many-to-one',
             joinColumn: {
                 name: 'product_id',
                 referencedColumnName: 'id',

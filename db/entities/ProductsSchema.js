@@ -109,7 +109,7 @@ module.exports = new EntitySchema({
     relations: {
         AgeRanges: {
             target: 'AgeRanges',
-            type: 'one-to-many',
+            type: 'one-to-one',
             joinColumn: {
                 name: 'age_range_id',
                 referencedColumnName: 'id',
