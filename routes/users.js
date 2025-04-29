@@ -350,7 +350,7 @@ router.get("/profile", verifyToken, async (req, res) => {
 router.put("/profile", verifyToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, gender, phone, birthDate, address, avatar } = req.body;
+    const { name, gender, phone, birthDate, address } = req.body;
 
     // 驗證必填欄位
     if (!name) {
@@ -428,16 +428,6 @@ router.put("/profile", verifyToken, async (req, res) => {
       });
     }
 
-    // 驗證頭像URL格式
-    const urlRegex =
-      /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
-    if (avatar !== undefined && avatar !== "" && !urlRegex.test(avatar)) {
-      return res.status(400).json({
-        status: false,
-        message: "欄位資料格式不符",
-      });
-    }
-
     const userRepository = dataSource.getRepository("User");
     const user = await userRepository.findOne({ where: { id: userId } });
 
@@ -458,7 +448,6 @@ router.put("/profile", verifyToken, async (req, res) => {
       user.birth_date = birthDate ? new Date(birthDate) : null;
     }
     if (address !== undefined) user.address = address;
-    if (avatar !== undefined) user.avatar = avatar;
 
     await userRepository.save(user);
 
