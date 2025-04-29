@@ -12,7 +12,7 @@ const verifyToken = async (req, res, next) => {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
         status: false,
-        message: "未提供有效的身份驗證權杖",
+        message: "Token 無效或過期，請重新登入",
       });
     }
 
@@ -28,14 +28,14 @@ const verifyToken = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({
         status: false,
-        message: "使用者不存在",
+        message: "Token 無效或過期，請重新登入",
       });
     }
 
     if (!user.is_active) {
       return res.status(403).json({
         status: false,
-        message: "帳戶尚未驗證",
+        message: "權限不足，無法存取此資訊",
       });
     }
 
@@ -52,13 +52,13 @@ const verifyToken = async (req, res, next) => {
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
         status: false,
-        message: "身份驗證權杖已過期",
+        message: "Token 無效或過期，請重新登入",
       });
     }
 
     return res.status(401).json({
       status: false,
-      message: "無效的身份驗證權杖",
+      message: "Token 無效或過期，請重新登入",
     });
   }
 };
@@ -70,7 +70,7 @@ const verifyAdmin = (req, res, next) => {
   if (!req.user || !req.user.is_admin) {
     return res.status(403).json({
       status: false,
-      message: "需要管理員權限",
+      message: "權限不足，無法存取此資訊",
     });
   }
   next();
