@@ -108,14 +108,14 @@ module.exports = new EntitySchema({
     },
     relations: {
         AgeRanges: {
-            target: 'AgeRanges',
-            type: 'one-to-one',
+            target: "AgeRanges",
+            type: "one-to-one",
             joinColumn: {
-                name: 'age_range_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'products_age_ranges_id_fk'
+                name: "age_range_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "products_age_ranges_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
     }
 })

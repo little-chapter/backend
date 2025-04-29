@@ -54,24 +54,24 @@ module.exports = new EntitySchema({
     },
     relations: {
         User: {
-            target: 'User',
-            type: 'many-to-one',
+            target: "User",
+            type: "many-to-one",
             joinColumn: {
-                name: 'user_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_reviews_user_id_fk'
+                name: "user_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_user_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
         OrderItems: {
-            target: 'OrderItems',
-            type: 'one-to-one',
+            target: "OrderItems",
+            type: "one-to-one",
             joinColumn: {
-                name: 'order_item_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_reviews_order_item_id_fk'
+                name: "order_item_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_order_item_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
     }
 })
