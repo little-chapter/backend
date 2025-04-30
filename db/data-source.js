@@ -2,6 +2,14 @@ const { DataSource } = require("typeorm");
 const config = require("../config/index");
 
 const UserSchema = require("./entities/UserSchema");
+const ProductsSchema = require("./entities/ProductsSchema");
+const AgeRangeSchema = require("./entities/AgeRangeSchema");
+const CategorySchema = require("./entities/CategorySchema");
+const ProductLinkCategory = require("./entities/ProductLinkCategory");
+const ProductImages = require("./entities/ProductImageSchema");
+const ProductReview = require("./entities/ProductReviewSchema");
+const OrderItem = require("./entities/OrderItemSchema");
+const Order = require("./entities/OrderSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -12,7 +20,17 @@ const dataSource = new DataSource({
   database: config.get("db.database"),
   synchronize: config.get("db.synchronize"),
   poolSize: 10,
-  entities: [UserSchema],
+  entities: [
+    UserSchema,
+    ProductsSchema,
+    AgeRangeSchema,
+    CategorySchema,
+    ProductLinkCategory,
+    ProductImages,
+    ProductReview,
+    OrderItem,
+    Order,
+  ],
   ssl: config.get("db.ssl"),
 });
 
