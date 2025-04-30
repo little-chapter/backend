@@ -1,13 +1,20 @@
 const dotenv = require("dotenv");
 
-const result = dotenv.config();
+// 只在非生產環境中載入 .env 檔案
+if (process.env.NODE_ENV !== "production") {
+  const result = dotenv.config();
+  if (result.error) {
+    throw result.error;
+  }
+  console.log(".env 檔案已在非生產環境中載入。");
+} else {
+  console.log("生產環境中使用 Render 環境變數，跳過 .env 檔案載入。");
+}
+
 const db = require("./db");
 const web = require("./web");
 const secret = require("./secret");
 
-if (result.error) {
-  throw result.error;
-}
 const config = {
   db,
   web,
