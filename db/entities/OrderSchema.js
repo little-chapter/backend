@@ -138,14 +138,14 @@ module.exports = new EntitySchema({
     },
     relations: {
         User: {
-            target: 'User',
-            type: 'one-to-many',
+            target: "User",
+            type: "many-to-one",
             joinColumn: {
-                name: 'user_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'orders_user_id_fk'
+                name: "user_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "orders_user_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
     }
 })

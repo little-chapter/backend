@@ -17,31 +17,24 @@ module.exports = new EntitySchema({
     },
     relations: {
         Products: {
-            target: 'Products',
-            type: 'one-to-many',
+            target: "Products",
+            type: "many-to-one",
             joinColumn: {
-                name: 'product_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_link_category_product_id_fk'
+                name: "product_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_link_category_product_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
         Categories: {
-            target: 'Categories',
-            type: 'one-to-many',
+            target: "Categories",
+            type: "many-to-one",
             joinColumn: {
-                name: 'category_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_link_category_category_id_fk'
+                name: "category_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_link_category_category_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
-    },
-    indices: [
-        {
-            name: 'PK_product_category',
-            unique: true,
-            columns: ['product_id', 'category_id']
-        }
-    ],
+    }
 })
