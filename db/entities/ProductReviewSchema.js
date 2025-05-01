@@ -28,11 +28,12 @@ module.exports = new EntitySchema({
         },
         title: {
             type: "varchar",
-            length: 255,
+            length: 10,
             nullable: false,
         },
         content: {
-            type: "text",
+            type: "varchar",
+            length: 100,
             nullable: false,
         },
         created_at: {
