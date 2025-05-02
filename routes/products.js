@@ -87,7 +87,7 @@ router.get("/", async(req, res, next)=>{
             productQuery = productQuery
                 .andWhere("categories.id =:categoryId", {categoryId: categoryId})
         }
-            if(filters.ageRangeId){
+        if(filters.ageRangeId){
             const ageRangeId = Number(filters.ageRangeId);
             const existAgeRange = await dataSource.getRepository("AgeRanges").findOneBy({id: ageRangeId});
             if(!existAgeRange){
@@ -170,17 +170,11 @@ router.get("/", async(req, res, next)=>{
         // 分頁
         let page = 1;
         let limit = 20;
-        if(filters.page){
-            const pageNum = Number(filters.page)
-            if(pageNum > 1){
-                page = pageNum;
-            }
+        if(filters.page && Number(filters.page) >1){
+            page = Number(filters.page);
         }
-        if(filters.limit){
-            const limitNum = Number(filters.limit)
-            if(limitNum >= 1){
-                limit = limitNum;
-            }
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
         }
         let totalPages = Math.ceil(count / limit);
         if(page > totalPages){
