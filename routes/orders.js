@@ -97,4 +97,66 @@ router.get("/", verifyToken, async(req, res, next) =>{
     }
 })
 
+router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
+    try{
+        const {id} = req.user;
+        const {orderNumber} = req.params;
+        if(!id || isNotValidString(id) || !isUUID(id) || !orderNumber || isNotValidString(orderNumber)){
+            res.status(400).json({
+                status: true,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        if(!existOrder){
+            res.status(404).json({
+                status: true,
+                message: "找不到該訂單"
+            })
+            return
+        }
+        const items = await dataSource.getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id", "image.is_primary =:isPrimary", {isPrimary: true})
+            .select([
+                "orderItems.product_id AS id",
+                "orderItems.product_title AS title",
+                "orderItems.quantity AS quantity",
+                "orderItems.subtotal AS subtotal",
+                "image.image_url AS image_url"
+            ])
+            .where("orderItems.order_id =:orderId", {orderId: existOrder.id})
+            .getRawMany();
+        const itemsResult = items.map(item =>{
+            return {
+                productId: item.id,
+                productTitle: item.title,
+                quantity: item.quantity,
+                itemAmount: item.subtotal,
+                imageUrl: item.image_url
+            }
+        })
+        let totalQuantity = 0;
+        itemsResult.forEach(item =>{
+            totalQuantity += item.quantity;
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                orderNumber: orderNumber,
+                totalQuantity: totalQuantity,
+                totalAmount: existOrder.total_amount,
+                discountAmount: existOrder.discount_amount,
+                shippingFee: existOrder.shipping_fee,
+                finalAmount: existOrder.final_amount,
+                items: itemsResult
+            }
+        })
+    }catch(error){
+        logger.error('取得訂單詳細錯誤:', error);
+        next(error);
+    }
+})
+
 module.exports = router;
