@@ -7,6 +7,7 @@ const logger = require("./utils/logger")("App");
 const usersRouter = require("./routes/users");
 const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
+const homepageRouter = require("./routes/homepage");
 
 const app = express();
 app.use(cors());
@@ -32,6 +33,7 @@ app.get("/healthcheck", (req, res) => {
 app.use("/api/users", usersRouter);
 app.use("/api/products", productsRouter);
 app.use("/api/orders", ordersRouter);
+app.use("/api/homepage", homepageRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({

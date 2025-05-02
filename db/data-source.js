@@ -10,6 +10,8 @@ const ProductImages = require("./entities/ProductImageSchema");
 const ProductReview = require("./entities/ProductReviewSchema");
 const OrderItem = require("./entities/OrderItemSchema");
 const Order = require("./entities/OrderSchema");
+const RecommendationProduct = require("./entities/RecommendationProductSchema");
+const RecommendationSection = require("./entities/RecommendationSectionSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -30,6 +32,8 @@ const dataSource = new DataSource({
     ProductReview,
     OrderItem,
     Order,
+    RecommendationProduct,
+    RecommendationSection,
   ],
   ssl: config.get("db.ssl"),
 });
