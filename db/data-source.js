@@ -5,7 +5,6 @@ const UserSchema = require("./entities/UserSchema");
 const ProductsSchema = require("./entities/ProductsSchema");
 const AgeRangeSchema = require("./entities/AgeRangeSchema");
 const CategorySchema = require("./entities/CategorySchema");
-const ProductLinkCategory = require("./entities/ProductLinkCategory");
 const ProductImages = require("./entities/ProductImageSchema");
 const ProductReview = require("./entities/ProductReviewSchema");
 const OrderItem = require("./entities/OrderItemSchema");
@@ -27,7 +26,6 @@ const dataSource = new DataSource({
     ProductsSchema,
     AgeRangeSchema,
     CategorySchema,
-    ProductLinkCategory,
     ProductImages,
     ProductReview,
     OrderItem,
