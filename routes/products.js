@@ -177,8 +177,12 @@ router.get("/", async(req, res, next)=>{
             }
         }
         const skip = (page - 1) * limit;
+        let totalPages = Math.ceil(count / limit);
+        if(page > totalPages){
+            page = totalPages
+        }
         const productsData = await productQuery
-            .offset(skip)
+            .skip(skip)
             .limit(limit)
             .getRawMany();
         //商品主題類型
