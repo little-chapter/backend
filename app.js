@@ -7,6 +7,7 @@ const logger = require("./utils/logger")("App");
 const usersRouter = require("./routes/users");
 const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
+const homepageRouter = require("./routes/homepage");
 const adminRouter = require("./routes/admin");
 
 const app = express();
@@ -33,6 +34,7 @@ app.get("/healthcheck", (req, res) => {
 app.use("/api/users", usersRouter);
 app.use("/api/products", productsRouter);
 app.use("/api/orders", ordersRouter);
+app.use("/api/homepage", homepageRouter);
 app.use("/api/admin", adminRouter);
 
 app.use((req, res, next) => {
