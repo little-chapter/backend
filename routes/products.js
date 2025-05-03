@@ -4,6 +4,13 @@ const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Products');
 const {isNotValidString, isNotValidInteger} = require("../utils/validUtils")
 
+function formatDateToYYYYMMDD(dateString){
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // 月份從 0 開始，所以要 + 1，並補零
+    const day = String(date.getDate()).padStart(2, "0"); // 補零
+    return `${year}-${month}-${day}`;
+}
 const allowedFilters = {
 	page: "number",
 	limit: "number",
@@ -50,15 +57,16 @@ router.get("/", async(req, res, next)=>{
                 }
             }
         }
-        //撈取資料
         let productQuery = await dataSource.getRepository("Products")
             .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
+            .innerJoin("products.Categories", "categories")
             .leftJoin("ProductImages", "image", "image.product_id = products.id", "image.is_primary =:isPrimary", {isPrimary: true})
             .select([
                 "products.id AS id",
                 "products.title AS title",
                 "ageRanges.name AS age_range_name",
+                "categories.name AS categories_name",
                 "products.author AS author",
                 "products.publisher AS publisher",
                 "products.price AS price",
@@ -77,11 +85,9 @@ router.get("/", async(req, res, next)=>{
                 return
             }
             productQuery = productQuery
-                .innerJoin("ProductLinkCategory", "plc", "plc.product_id = products.id")
-                .innerJoin("plc.Categories", "categories", "categories.id =:categoryId", {categoryId: categoryId})
-                // .andWhere("categories.id =:categoryId", {categoryId: categoryId})
+                .andWhere("categories.id =:categoryId", {categoryId: categoryId})
         }
-            if(filters.ageRangeId){
+        if(filters.ageRangeId){
             const ageRangeId = Number(filters.ageRangeId);
             const existAgeRange = await dataSource.getRepository("AgeRanges").findOneBy({id: ageRangeId});
             if(!existAgeRange){
@@ -164,52 +170,27 @@ router.get("/", async(req, res, next)=>{
         // 分頁
         let page = 1;
         let limit = 20;
-        if(filters.page){
-            const pageNum = Number(filters.page)
-            if(pageNum > 1){
-                page = pageNum;
-            }
+        if(filters.page && Number(filters.page) >1){
+            page = Number(filters.page);
         }
-        if(filters.limit){
-            const limitNum = Number(filters.limit)
-            if(limitNum >= 1){
-                limit = limitNum;
-            }
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
         }
-        const skip = (page - 1) * limit;
         let totalPages = Math.ceil(count / limit);
         if(page > totalPages){
             page = totalPages
         }
+        const skip = (page - 1) * limit;
         const productsData = await productQuery
-            .skip(skip)
+            .offset(skip)
             .limit(limit)
             .getRawMany();
-        //商品主題類型
-        const productIds = productsData.map(data =>{
-            return data.id
-        })
-        const categoryData = await dataSource.getRepository("ProductLinkCategory")
-            .createQueryBuilder("plc")
-            .innerJoin("plc.Categories", "categories")
-            .select([
-                "plc.product_id AS id",
-                "categories.name AS name"
-            ])
-            .where("plc.product_id IN (:...productIds)", {productIds})
-            .getRawMany();
         const productsResult = productsData.map(product =>{
-            const nameArr = [];
-            categoryData.forEach(category =>{
-                if(category.id === product.id){
-                    nameArr.push(category.name);
-                }
-            })
             return {
                 productId: product.id,
                 title: product.title,
                 ageRangeName: product.age_range_name,
-                categoryName: nameArr,
+                categoryName: product.categories_name,
                 author: product.author,
                 publisher: product.publisher,
                 price: product.price,
@@ -224,7 +205,7 @@ router.get("/", async(req, res, next)=>{
                     page: page,
                     limit: limit,
                     total: count,
-                    totalPages: Math.ceil(count / limit),
+                    totalPages: totalPages,
                 },
                 products: productsResult
             }
@@ -249,6 +230,7 @@ router.get("/:productId", async(req, res, next)=>{
         const existProduct = await dataSource.getRepository("Products")
             .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
+            .innerJoin("products.Categories", "categories")
             .select([
                 "products.id AS id",
                 "products.title AS title",
@@ -256,6 +238,8 @@ router.get("/:productId", async(req, res, next)=>{
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "products.stock_quantity AS stock_quantity",
+                "categories.id AS categories_id",
+                "categories.name AS categories_name",
                 "products.age_range_id AS age_range_id",
                 "ageRanges.name AS age_range_name",
                 "products.isbn AS isbn",
@@ -274,6 +258,7 @@ router.get("/:productId", async(req, res, next)=>{
             })
             return
         }
+        existProduct.publish_date = formatDateToYYYYMMDD(existProduct.publish_date);
         // 取得商品圖片
         const allImages = await dataSource.getRepository("ProductImages")
             .createQueryBuilder("images")
@@ -291,16 +276,6 @@ router.get("/:productId", async(req, res, next)=>{
         }else{
             existProduct.imageUrls = null;
         }
-        //取得商品關聯主題
-        const categories = await dataSource.getRepository("ProductLinkCategory")
-            .createQueryBuilder("plc")
-            .innerJoin("plc.Categories", "categories")
-            .select([
-                "categories.id AS id",
-                "categories.name AS name",
-            ])
-            .where("plc.product_id =:productId", {productId: existProduct.id})
-            .getRawMany()
         //取得商品評價次數 平均評價
         let count = 0;
         let averageRating = 0;
@@ -316,6 +291,7 @@ router.get("/:productId", async(req, res, next)=>{
             .where("reviews.product_id =:productId", {productId: existProduct.id})
             .getRawMany();
         const reviewsResult = reviews.map(review =>{
+            review.created_at = formatDateToYYYYMMDD(review.created_at);
             return {
                 userId: review.user_id,
                 rating: review.rating,
@@ -340,7 +316,10 @@ router.get("/:productId", async(req, res, next)=>{
                 price: existProduct.price,
                 discountPrice: existProduct.discount_price,
                 stockQuantity: existProduct.stock_quantity,
-                categoryInfo: categories,
+                categoryInfo: {
+                    id: existProduct.categories_id,
+                    name: existProduct.categories_name
+                },
                 ageRange: {
                     id: existProduct.age_range_id,
                     name: existProduct.age_range_name
