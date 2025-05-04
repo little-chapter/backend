@@ -242,7 +242,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
         }
         const orderData = await dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
-            .innerJoin("PaymentTransactions", "pt", "pt.order_number =:orderNumber", {orderNumber: orderNumber})
+            .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", {merchantOrderNo: orderNumber})
             .select([
                 "orders.id AS id",
                 "orders.order_number AS order_number",
