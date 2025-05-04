@@ -322,4 +322,68 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
         next(error);
     }
 })
+//更新訂單狀態
+router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, res, next) =>{
+    try{
+        const {orderNumber} = req.params;
+        const {orderStatus, statusNote} = req.body;
+        if(!orderNumber || isNotValidString(orderNumber) || !orderStatus || isNotValidString(orderStatus)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            })
+            return
+        }
+        if(statusNote && typeof statusNote !== "string"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            })
+            return
+        }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        if(!existOrder){
+            res.status(404).json({
+                status: false,
+                message: "找不到該訂單"
+            })
+            return
+        }
+        if((orderStatus === "shipped" && existOrder.order_status === "pending" && existOrder.payment_status === "paid" && existOrder.shipping_status === "notReceived")
+            || (orderStatus === "completed" && existOrder.order_status === "shipped" && existOrder.payment_status === "paid" && existOrder.shipping_status === "delivered")
+            || (orderStatus === "cancelled" && existOrder.order_status === "pending" && existOrder.payment_status === "paid" && existOrder.shipping_status === "notReceived")
+            || (orderStatus === "cancelled" && existOrder.order_status === "completed" && existOrder.payment_status === "paid" && existOrder.shipping_status === "returned")){
+            const result = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .update()
+                .set({
+                    order_status: orderStatus,
+                    status_note: statusNote,
+                    cancelled_at: new Date(),
+                    updated_at: new Date()
+                })
+                .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+                .execute()
+            if(result.affected !== 1){
+                res.status(422).json({
+                    status: false,
+                    message: "訂單更新失敗"
+                })
+                return
+            }
+            res.status(200).json({
+                status: true,
+                message: "訂單狀態更新成功"
+            })
+        }else{
+            res.status(400).json({
+                status: false,
+                message: "無效的訂單狀態或狀態轉換不被允許"
+            })
+        }
+    }catch(error){
+        logger.error('更新用戶訂單狀態錯誤:', error);
+        next(error);
+    }
+})
 module.exports = router;
