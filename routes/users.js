@@ -672,4 +672,69 @@ router.post("/reset-password", async (req, res) => {
   }
 });
 
+// 更新使用者密碼
+router.put("/password", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // 驗證密碼格式
+    const passwordRegex = /^[a-zA-Z0-9]{8,16}$/;
+    if (
+      !currentPassword ||
+      !passwordRegex.test(currentPassword) ||
+      !newPassword ||
+      !passwordRegex.test(newPassword)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "當前密碼或新密碼不符合規則",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({
+      where: { id: userId },
+      select: ["id", "password"],
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到該用戶",
+      });
+    }
+
+    // 驗證當前密碼
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        status: false,
+        message: "當前密碼輸入錯誤",
+      });
+    }
+
+    // 加密新密碼
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 更新密碼
+    user.password = hashedPassword;
+    await userRepository.save(user);
+
+    return res.status(200).json({
+      status: true,
+      message: "密碼更新成功",
+    });
+  } catch (error) {
+    console.error("Error updating password:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
 module.exports = router;
