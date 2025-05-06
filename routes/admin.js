@@ -230,4 +230,96 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
     }
 })
 
+router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, next) =>{
+    try{
+        const {orderNumber} = req.params;
+        if(!orderNumber || isNotValidString(orderNumber)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            })
+            return
+        }
+        const orderData = await dataSource.getRepository("Orders")
+            .createQueryBuilder("orders")
+            .innerJoin("PaymentTransactions", "pt", "pt.order_number =:orderNumber", {orderNumber: orderNumber})
+            .select([
+                "orders.id AS id",
+                "orders.order_number AS order_number",
+                "orders.order_status AS order_status",
+                "orders.shipping_status AS shipping_status",
+                "orders.payment_status AS payment_status",
+                "orders.payment_method AS payment_method",
+                "pt.transaction_id AS transaction_id",
+                "orders.total_amount AS total_amount",
+                "orders.shipping_fee AS shipping_fee",
+                "orders.discount_amount AS discount_amount",
+                "orders.final_amount AS final_amount",
+                "orders.note AS note",
+                "orders.status_note AS status_note",
+                "orders.recipient_name AS recipient_name",
+                "orders.recipient_phone AS recipient_phone",
+                "orders.shipping_method AS shipping_method",
+                "orders.shipping_address AS shipping_address",
+                "orders.store_code AS store_code",
+                "orders.store_name AS store_name",
+            ])
+            .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+            .getRawOne();
+        if(!orderData){
+            res.status(404).json({
+                status: false,
+                message: "找不到此訂單"
+            })
+            return
+        }
+        const orderItems = await dataSource.getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .select([
+                "orderItems.product_title AS title",
+                "orderItems.quantity AS quantity",
+                "orderItems.price AS price",
+                "orderItems.subtotal AS subtotal"
+            ])
+            .where("orderItems.order_id =:orderId", {orderId: orderData.id})
+            .getRawMany()
+        const itemsResult = orderItems.map(item =>{
+            return {
+                productTitle: item.title,
+                quantity: item.quantity,
+                price: item.price,
+                subtotal: item.subtotal
+            }
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                orderNumber: orderData.order_number,
+                orderStatus: orderData.order_status,
+                shippingStatus: orderData.shipping_status,
+                paymentStatus: orderData.payment_status,
+                paymentMethod: orderData.payment_method,
+                transactionId: orderData.transaction_id,
+                totalAmount: orderData.total_amount,
+                shippingFee: orderData.shipping_fee,
+                discountAmount: orderData.discount_amount,
+                finalAmount: orderData.final_amount,
+                note: orderData.note,
+                statusNote: orderData.status_note,
+                shippingInfo: {
+                    recipientName: orderData.recipient_name,
+                    recipientPhone: orderData.recipient_phone,
+                    shippingMethod: orderData.shipping_method,
+                    shippingAddress: orderData.shipping_address,
+                    storeCode: orderData.store_code,
+                    storeName: orderData.store_name,
+                },
+                items: itemsResult
+            }
+        })
+    }catch(error){
+        logger.error('取得用戶訂單詳細錯誤:', error);
+        next(error);
+    }
+})
 module.exports = router;
