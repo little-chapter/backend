@@ -10,7 +10,11 @@ module.exports = new EntitySchema({
             generated: "increment",
             nullable: false,
         },
-        order_number: {
+        order_id: {
+            type: "uuid",
+            nullable: false,
+        },
+        merchant_order_no: {
             type: "varchar",
             length: 30,
             nullable: false,
@@ -117,9 +121,9 @@ module.exports = new EntitySchema({
             target: "Orders",
             type: "one-to-one",
             joinColumn: {
-                name: "order_number",
-                referencedColumnName: "order_number",
-                foreignKeyConstraintName: "paymentTransactions_orders_order_number_fk"
+                name: "order_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "paymentTransactions_orders_id_fk"
             },
             onDelete:"RESTRICT"
         },
