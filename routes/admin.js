@@ -274,7 +274,6 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
             ])
             .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
             .getRawOne();
-        console.log(orderData)
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .select([
