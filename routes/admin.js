@@ -240,6 +240,14 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
             })
             return
         }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        if(!existOrder){
+            res.status(404).json({
+                status: false,
+                message: "找不到此訂單"
+            })
+            return
+        }
         const orderData = await dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
             .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", {merchantOrderNo: orderNumber})
@@ -266,13 +274,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
             ])
             .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
             .getRawOne();
-        if(!orderData){
-            res.status(404).json({
-                status: false,
-                message: "找不到此訂單"
-            })
-            return
-        }
+        console.log(orderData)
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .select([
