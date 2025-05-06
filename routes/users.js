@@ -592,4 +592,84 @@ router.post("/verify-code", async (req, res) => {
   }
 });
 
+// 設定新密碼
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證代碼格式
+    if (!code || typeof code !== "string" || code.length !== 6) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證密碼格式
+    const passwordRegex = /^[a-zA-Z0-9]{8,16}$/;
+    if (!newPassword || !passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        status: false,
+        message: "密碼格式錯誤，請輸入8-16個英數字元，區分英文大小寫",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    if (!user.code || user.code !== code) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼錯誤",
+      });
+    }
+
+    // 檢查驗證碼是否過期
+    const now = new Date();
+    if (user.code_time && new Date(user.code_time) < now) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼過期，請重新申請",
+      });
+    }
+
+    // 加密新密碼
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 更新使用者密碼，清除驗證碼
+    user.password = hashedPassword;
+    user.code = null;
+    user.code_time = null;
+    await userRepository.save(user);
+
+    // 回傳成功訊息
+    return res.status(200).json({
+      status: true,
+      message: "密碼已成功重設",
+    });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
 module.exports = router;
