@@ -475,4 +475,56 @@ router.put("/profile", verifyToken, async (req, res) => {
   }
 });
 
+// 請求重設密碼
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+
+    // 檢查使用者是否存在
+    const user = await userRepository.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    // 生成重設密碼的驗證碼並設定過期時間（30分鐘後）
+    const verificationCode = generateVerificationCode();
+    const codeExpiryTime = new Date();
+    codeExpiryTime.setMinutes(codeExpiryTime.getMinutes() + 30);
+
+    // 更新使用者的驗證碼
+    user.code = verificationCode;
+    user.code_time = codeExpiryTime;
+    await userRepository.save(user);
+
+    // 發送重設密碼的驗證郵件
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+
+    // 回傳成功訊息
+    return res.status(200).json({
+      status: true,
+      message: "已發送驗證信至信箱",
+    });
+  } catch (error) {
+    console.error("Error requesting password reset:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
 module.exports = router;
