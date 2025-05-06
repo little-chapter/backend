@@ -475,4 +475,266 @@ router.put("/profile", verifyToken, async (req, res) => {
   }
 });
 
+// 請求重設密碼
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+
+    // 檢查使用者是否存在
+    const user = await userRepository.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    // 生成重設密碼的驗證碼並設定過期時間（30分鐘後）
+    const verificationCode = generateVerificationCode();
+    const codeExpiryTime = new Date();
+    codeExpiryTime.setMinutes(codeExpiryTime.getMinutes() + 30);
+
+    // 更新使用者的驗證碼
+    user.code = verificationCode;
+    user.code_time = codeExpiryTime;
+    await userRepository.save(user);
+
+    // 發送重設密碼的驗證郵件
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+
+    // 回傳成功訊息
+    return res.status(200).json({
+      status: true,
+      message: "已發送驗證信至信箱",
+    });
+  } catch (error) {
+    console.error("Error requesting password reset:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 驗證碼驗證
+router.post("/verify-code", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    // 驗證代碼格式
+    if (!code || typeof code !== "string" || code.length !== 6) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    if (!user.code || user.code !== code) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼錯誤",
+      });
+    }
+
+    // 檢查驗證碼是否過期
+    const now = new Date();
+    if (user.code_time && new Date(user.code_time) < now) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼過期，請重新申請",
+      });
+    }
+
+    // 回傳驗證成功訊息
+    return res.status(200).json({
+      status: true,
+      data: {
+        email: user.email,
+        code: user.code,
+      },
+    });
+  } catch (error) {
+    console.error("Error verifying reset code:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 設定新密碼
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    // 驗證代碼格式
+    if (!code || typeof code !== "string" || code.length !== 6) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    if (!user.code || user.code !== code) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼錯誤",
+      });
+    }
+
+    // 檢查驗證碼是否過期
+    const now = new Date();
+    if (user.code_time && new Date(user.code_time) < now) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼過期，請重新申請",
+      });
+    }
+
+    // 驗證密碼格式
+    const passwordRegex = /^[a-zA-Z0-9]{8,16}$/;
+    if (!newPassword || !passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        status: false,
+        message: "密碼格式錯誤，請輸入8-16個英數字元，區分英文大小寫",
+      });
+    }
+
+    // 加密新密碼
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 更新使用者密碼，清除驗證碼
+    user.password = hashedPassword;
+    user.code = null;
+    user.code_time = null;
+    await userRepository.save(user);
+
+    // 回傳成功訊息
+    return res.status(200).json({
+      status: true,
+      message: "密碼已成功重設",
+    });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
+// 更新使用者密碼
+router.put("/password", verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // 驗證密碼格式
+    const passwordRegex = /^[a-zA-Z0-9]{8,16}$/;
+    if (
+      !currentPassword ||
+      !passwordRegex.test(currentPassword) ||
+      !newPassword ||
+      !passwordRegex.test(newPassword)
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "當前密碼或新密碼不符合規則",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({
+      where: { id: userId },
+      select: ["id", "password"],
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "找不到該用戶",
+      });
+    }
+
+    // 驗證當前密碼
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        status: false,
+        message: "當前密碼輸入錯誤",
+      });
+    }
+
+    // 加密新密碼
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 更新密碼
+    user.password = hashedPassword;
+    await userRepository.save(user);
+
+    return res.status(200).json({
+      status: true,
+      message: "密碼更新成功",
+    });
+  } catch (error) {
+    console.error("Error updating password:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
 module.exports = router;
