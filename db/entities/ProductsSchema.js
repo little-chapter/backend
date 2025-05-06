@@ -69,6 +69,10 @@ module.exports = new EntitySchema({
             type: "integer",
             nullable: false,
         },
+        category_id: {
+            type: "integer",
+            nullable: false,
+        },
         is_featured: {
             type: "boolean",
             nullable: false,
@@ -109,11 +113,21 @@ module.exports = new EntitySchema({
     relations: {
         AgeRanges: {
             target: "AgeRanges",
-            type: "one-to-one",
+            type: "many-to-one",
             joinColumn: {
                 name: "age_range_id",
                 referencedColumnName: "id",
                 foreignKeyConstraintName: "products_age_ranges_id_fk"
+            },
+            onDelete:"RESTRICT"
+        },
+        Categories: {
+            target: "Categories",
+            type: "many-to-one",
+            joinColumn: {
+                name: "category_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "products_categories_id_fk"
             },
             onDelete:"RESTRICT"
         },

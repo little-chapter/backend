@@ -28,11 +28,12 @@ module.exports = new EntitySchema({
         },
         title: {
             type: "varchar",
-            length: 255,
+            length: 10,
             nullable: false,
         },
         content: {
-            type: "text",
+            type: "varchar",
+            length: 100,
             nullable: false,
         },
         created_at: {
@@ -53,6 +54,16 @@ module.exports = new EntitySchema({
         },
     },
     relations: {
+        Products: {
+            target: "Products",
+            type: "many-to-one",
+            joinColumn: {
+                name: "product_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_product_id_fk"
+            },
+            onDelete:"RESTRICT"
+        },
         User: {
             target: "User",
             type: "many-to-one",
