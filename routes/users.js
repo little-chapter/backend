@@ -527,4 +527,69 @@ router.post("/forgot-password", async (req, res) => {
   }
 });
 
+// 驗證碼驗證
+router.post("/verify-code", async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    // 驗證電子郵件格式
+    const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!email || !emailRegex.test(email) || email.length > 255) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證代碼格式
+    if (!code || typeof code !== "string" || code.length !== 6) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({ where: { email } });
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "此 Email 尚未註冊",
+      });
+    }
+
+    if (!user.code || user.code !== code) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼錯誤",
+      });
+    }
+
+    // 檢查驗證碼是否過期
+    const now = new Date();
+    if (user.code_time && new Date(user.code_time) < now) {
+      return res.status(401).json({
+        status: false,
+        message: "驗證碼過期，請重新申請",
+      });
+    }
+
+    // 回傳驗證成功訊息
+    return res.status(200).json({
+      status: true,
+      data: {
+        email: user.email,
+        code: user.code,
+      },
+    });
+  } catch (error) {
+    console.error("Error verifying reset code:", error);
+    return res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
+  }
+});
+
 module.exports = router;
