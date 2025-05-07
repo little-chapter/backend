@@ -4,7 +4,10 @@ const { dataSource } = require("../db/data-source");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/secret");
-const { sendVerificationEmail } = require("../utils/mailer");
+const {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+} = require("../utils/mailer");
 const { generateVerificationCode } = require("../utils/codeGenerator");
 const { verifyToken } = require("../middlewares/auth");
 
@@ -511,7 +514,7 @@ router.post("/forgot-password", async (req, res) => {
     await userRepository.save(user);
 
     // 發送重設密碼的驗證郵件
-    const emailSent = await sendVerificationEmail(email, verificationCode);
+    const emailSent = await sendPasswordResetEmail(email, verificationCode);
 
     // 回傳成功訊息
     return res.status(200).json({
