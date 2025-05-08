@@ -122,10 +122,12 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         }
         const items = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
+            .innerJoin("orderItems.Products", "products")
             .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id", "image.is_primary =:isPrimary", {isPrimary: true})
             .select([
                 "orderItems.product_id AS id",
                 "orderItems.product_title AS title",
+                "products.author AS author",
                 "orderItems.quantity AS quantity",
                 "orderItems.subtotal AS subtotal",
                 "image.image_url AS image_url"
@@ -136,20 +138,15 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
             return {
                 productId: item.id,
                 productTitle: item.title,
+                author: item.author,
                 quantity: item.quantity,
                 itemAmount: item.subtotal,
                 imageUrl: item.image_url
             }
         })
-        let totalQuantity = 0;
-        itemsResult.forEach(item =>{
-            totalQuantity += item.quantity;
-        })
         res.status(200).json({
             status: true,
             data: {
-                orderNumber: orderNumber,
-                totalQuantity: totalQuantity,
                 totalAmount: existOrder.total_amount,
                 discountAmount: existOrder.discount_amount,
                 shippingFee: existOrder.shipping_fee,
