@@ -20,7 +20,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
             if(!(key in allowedFilters)){
                 res.status(400).json({
                     status: false,
-                    message: `不支援的搜尋條件：${key}`,
+                    message: "不支援的搜尋條件",
                 });
                 return
             }
@@ -28,7 +28,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
             if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
                 res.status(400).json({
                     status: false,
-                    message: `欄位 ${key} 資料格式不符`,
+                    message: "欄位資料格式不符",
                 });
                 return
             }
@@ -42,12 +42,13 @@ router.get("/", verifyToken, async(req, res, next) =>{
         if(!id || isNotValidString(id) || !isUUID(id)){
             res.status(400).json({
                 status: false,
-                message: `欄位資料格式不符`,
+                message: "欄位資料格式不符",
             });
             return
         }
         const ordersQuery = await dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
+            .innerJoin("OrderItems", "orderItems", "orderItems.order_id = orders.id")
             .select([
                 "orders.order_number AS order_number",
                 "orders.created_at AS created_at",
@@ -55,24 +56,27 @@ router.get("/", verifyToken, async(req, res, next) =>{
                 "orders.order_status AS order_status",
                 "orders.payment_status AS payment_status",
                 "orders.shipping_status AS shipping_status",
+                "SUM(orderItems.quantity) AS total_quantity"
             ])
             .where("orders.user_id =:userId", {userId: id})
+            .groupBy("orders.id")
             .orderBy("orders.created_at", "DESC")
         const countQuery = ordersQuery.clone(); 
         const count = await countQuery.getCount();
-        const totalPages = Math.ceil(count / limit);
+        const totalPages = Math.max(1, Math.ceil(count / limit));
         if(page > totalPages){
             page = totalPages
         }
         const skip = (page - 1) * limit;
         const ordersData = await ordersQuery
-            .skip(skip)
-            .take(limit)
-            .getRawMany()
+            .offset(skip)
+            .limit(limit)
+            .getRawMany();
         const ordersResult = ordersData.map(order =>{
             return {
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
+                totalQuantity: order.total_quantity,
                 finalAmount: order.final_amount,
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
