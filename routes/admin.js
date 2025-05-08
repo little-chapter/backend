@@ -193,7 +193,7 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
         if(filters.limit && Number(filters.limit) >= 1){
             limit = Number(filters.limit);
         }
-        const totalPages = Math.ceil(count / limit);
+        const totalPages = Math.max(1, Math.ceil(count / limit));
         if(page > totalPages){
             page = totalPages;
         }
