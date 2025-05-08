@@ -32,7 +32,7 @@ router.get("/", async(req, res, next)=>{
             if (!(key in allowedFilters)) {
                 res.status(400).json({
                     status: false,
-                    message: `不支援的搜尋條件：${key}`,
+                    message: "不支援的搜尋條件",
                 });
                 return
             }
@@ -42,7 +42,7 @@ router.get("/", async(req, res, next)=>{
                 if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 ${key} 資料格式不符`,
+                        message: "欄位資料格式不符",
                     });
                     return
                 }
@@ -51,7 +51,7 @@ router.get("/", async(req, res, next)=>{
                 if(!value || isNotValidString(value)){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 ${key} 資料格式不符`,
+                        message: "欄位資料格式不符",
                     });
                     return
                 }
@@ -72,6 +72,10 @@ router.get("/", async(req, res, next)=>{
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "image.image_url AS image_url",
+                "products.is_featured AS is_featured",
+                "products.is_new_arrival AS is_new_arrival",
+                "products.is_bestseller AS is_bestseller",
+                "products.is_discount AS is_discount",
             ])
             .where("products.is_visible =:isVisible", {isVisible: true})
         if(filters.categoryId){
@@ -133,7 +137,7 @@ router.get("/", async(req, res, next)=>{
             if(!(sortByStr in allowedSortOrder)){
                 res.status(400).json({
                     status: false,
-                    message: `不支援的搜尋條件： ${sortByStr}`
+                    message: `不支援的搜尋條件`
                 })
                 return
             }
@@ -144,7 +148,7 @@ router.get("/", async(req, res, next)=>{
                 if(!(order === "DESC" || order === "ASC")){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 sortOrder 資料格式不符`
+                        message: `欄位資料格式不符`
                     })
                     return
                 }
@@ -156,7 +160,7 @@ router.get("/", async(req, res, next)=>{
                 if(!(order === "DESC" || order === "ASC")){
                     res.status(400).json({
                         status: false,
-                        message: "欄位 sortOrder 資料格式不符"
+                        message: "欄位資料格式不符"
                     })
                     return
                 }
@@ -176,7 +180,7 @@ router.get("/", async(req, res, next)=>{
         if(filters.limit && Number(filters.limit) >= 1){
             limit = Number(filters.limit)
         }
-        let totalPages = Math.ceil(count / limit);
+        let totalPages = Math.max(1, Math.ceil(count / limit)); //總頁數至少為1
         if(page > totalPages){
             page = totalPages
         }
@@ -195,7 +199,11 @@ router.get("/", async(req, res, next)=>{
                 publisher: product.publisher,
                 price: product.price,
                 discountPrice: product.discount_price,
-                imageUrl: product.image_url
+                imageUrl: product.image_url,
+                isFeatured: product.is_featured,
+                isNewArrival: product.is_new_arrival,
+                isBestseller: product.is_bestseller,
+                isDiscount: product.is_discount
             }
         })
         res.status(200).json({
