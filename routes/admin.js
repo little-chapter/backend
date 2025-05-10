@@ -360,8 +360,8 @@ router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, 
                 .set({
                     order_status: orderStatus,
                     status_note: statusNote,
-                    cancelled_at: new Date(),
-                    updated_at: new Date()
+                    cancelled_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
                 })
                 .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
                 .execute()
