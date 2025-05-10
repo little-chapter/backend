@@ -254,6 +254,7 @@ router.get("/:productId", async(req, res, next)=>{
                 "products.publisher AS publisher",
                 "products.publish_date AS publish_date",
                 "products.page_count AS page_count",
+                "products.introduction_html AS introduction_html",
             ])
             .where("products.id =:productId", {productId: productId})
             .getRawOne();
@@ -274,45 +275,10 @@ router.get("/:productId", async(req, res, next)=>{
             .where("images.product_id =:productId", {productId: existProduct.id})
             .orderBy("display_order")
             .getRawMany();
-        if (allImages){
-            const productImages = allImages.map(image =>{
-                return image.image_url
-            })
-            existProduct.imageUrls = productImages;
-        }else{
-            existProduct.imageUrls = null;
-        }
-        //取得商品評價次數 平均評價
-        let count = 0;
-        let averageRating = 0;
-        const reviews = await dataSource.getRepository("ProductReviews")
-            .createQueryBuilder("reviews")
-            .innerJoin("reviews.User", "user")
-            .select([
-                "user.id AS user_id",
-                "reviews.rating AS rating",
-                "reviews.content AS content",
-                "reviews.created_at AS created_at"
-            ])
-            .where("reviews.product_id =:productId", {productId: existProduct.id})
-            .getRawMany();
-        const reviewsResult = reviews.map(review =>{
-            review.created_at = formatDateToYYYYMMDD(review.created_at);
-            return {
-                userId: review.user_id,
-                rating: review.rating,
-                content: review.content,
-                createdAt: review.created_at
-            }
+        const productImages = allImages.map(image =>{
+            return image.image_url
         })
-        if(reviewsResult.length !== 0){
-            count = reviewsResult.length;
-            let totalRatings = 0;
-            reviewsResult.forEach(review =>{
-                totalRatings += review.rating;
-            })
-            averageRating = totalRatings / count;
-        }
+        existProduct.imageUrls = (productImages) ? productImages : null;
         res.status(200).json({
             status: true,
             data: {
@@ -331,15 +297,13 @@ router.get("/:productId", async(req, res, next)=>{
                     name: existProduct.age_range_name
                 },
                 imageUrls: existProduct.imageUrls,
-                isbn: existProduct.isbn,
                 author: existProduct.author,
                 illustrator: existProduct.illustrator,
                 publisher: existProduct.publisher,
                 publishDate: existProduct.publish_date,
+                isbn: existProduct.isbn,
                 pageCount: existProduct.page_count,
-                averageRating: averageRating,
-                reviewCount: count,
-                reviews: reviewsResult
+                introductionHtml: existProduct.introduction_html
             }
         })
     }catch(error){

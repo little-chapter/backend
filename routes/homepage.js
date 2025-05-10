@@ -40,7 +40,6 @@ router.get("/", async(req, res, next)=>{
                     ("ageRanges.name AS name"),
                 ])
                 .getRawMany();
-            console.log("ageRanges:", ageRanges)
             res.status(200).json({
                 status: true,
                 data: {
