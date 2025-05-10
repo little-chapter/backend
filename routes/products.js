@@ -221,6 +221,128 @@ router.get("/", async(req, res, next)=>{
         next(error);
     }
 })
+//取得商品評價
+router.get("/reviews", async(req, res, next)=>{
+    try{
+        let {productId} = req.query;
+        if(!productId){
+            //撈所有評價
+            const productReviews = await dataSource.getRepository("ProductReviews")
+                .createQueryBuilder("pr")
+                .innerJoin("pr.OrderItems", "orderItems")
+                .innerJoin("pr.User", "user")
+                .innerJoin("orderItems.Products", "products", "products.is_visible =:isVisible", {isVisible: true})
+                .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary = :isPrimary", { isPrimary: true })
+                .select([
+                    "products.id AS pid",
+                    "products.title AS title",
+                    "image.image_url AS image_url",
+                    "pr.content AS content",
+                    "pr.rating AS rating",
+                    "user.name AS username",
+                    "pr.created_at AS created_at"
+                ])
+                .orderBy("pr.created_at", "ASC")
+                .getRawMany();
+            const reviewsResult = productReviews.map(review =>{
+                return {
+                    productId: review.pid,
+                    productTitle: review.title,
+                    productImageUrl: review.image_url,
+                    content: review.content,
+                    rating: review.rating,
+                    username: review.username,
+                    createdAt: formatDateToYYYYMMDD(review.created_at)
+                }
+            });
+            let count = 0;
+            let averageRating = 0;
+            if(reviewsResult.length !== 0){
+                count = reviewsResult.length;
+                let totalRatings = 0;
+                reviewsResult.forEach(review =>{
+                    totalRatings += review.rating;
+                })
+                averageRating = totalRatings / count;
+            }
+            res.status(200).json({
+                status: true,
+                data: {
+                    averageRating: averageRating,
+                    reviewCount: count,
+                    reviews: reviewsResult
+                }
+            })
+        }else{
+            productId = Number(productId);
+            if(isNotValidInteger(productId) || Number.isNaN(productId)){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料不符合格式"
+                })
+                return
+            }
+            const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
+            if(!existProduct){
+                res.status(400).json({
+                    status: false,
+                    message: "找不到此商品"
+                })
+                return
+            }
+            const productReviews = await dataSource.getRepository("ProductReviews")
+                .createQueryBuilder("pr")
+                .innerJoin("pr.OrderItems", "orderItems")
+                .innerJoin("pr.User", "user")
+                .innerJoin("orderItems.Products", "products", "products.is_visible =:isVisible", {isVisible: true})
+                .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary = :isPrimary", { isPrimary: true })
+                .select([
+                    "products.id AS pid",
+                    "products.title AS title",
+                    "image.image_url AS image_url",
+                    "pr.content AS content",
+                    "pr.rating AS rating",
+                    "user.name AS username",
+                    "pr.created_at AS created_at"
+                ])
+                .where("products.id =:productId", {productId: productId})
+                .orderBy("pr.created_at", "ASC")
+                .getRawMany();
+            const reviewsResult = productReviews.map(review =>{
+                return {
+                    productId: review.pid,
+                    productTitle: review.title,
+                    productImageUrl: review.image_url,
+                    content: review.content,
+                    rating: review.rating,
+                    username: review.username,
+                    createdAt: formatDateToYYYYMMDD(review.created_at)
+                }
+            });
+            let count = 0;
+            let averageRating = 0;
+            if(reviewsResult.length !== 0){
+                count = reviewsResult.length;
+                let totalRatings = 0;
+                reviewsResult.forEach(review =>{
+                    totalRatings += review.rating;
+                })
+                averageRating = totalRatings / count;
+            }
+            res.status(200).json({
+                status: true,
+                data: {
+                    averageRating: averageRating,
+                    reviewCount: count,
+                    reviews: reviewsResult
+                }
+            })
+        }
+    }catch(error){
+        logger.error('取得評價列表錯誤:', error);
+        next(error);
+    }
+})
 //取得商品詳細資料
 router.get("/:productId", async(req, res, next)=>{
     try{
@@ -265,7 +387,6 @@ router.get("/:productId", async(req, res, next)=>{
             })
             return
         }
-        existProduct.publish_date = formatDateToYYYYMMDD(existProduct.publish_date);
         // 取得商品圖片
         const allImages = await dataSource.getRepository("ProductImages")
             .createQueryBuilder("images")
@@ -300,7 +421,7 @@ router.get("/:productId", async(req, res, next)=>{
                 author: existProduct.author,
                 illustrator: existProduct.illustrator,
                 publisher: existProduct.publisher,
-                publishDate: existProduct.publish_date,
+                publishDate: formatDateToYYYYMMDD(existProduct.publish_date),
                 isbn: existProduct.isbn,
                 pageCount: existProduct.page_count,
                 introductionHtml: existProduct.introduction_html
