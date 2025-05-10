@@ -72,7 +72,6 @@ router.get("/", async(req, res, next)=>{
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "image.image_url AS image_url",
-                "products.is_featured AS is_featured",
                 "products.is_new_arrival AS is_new_arrival",
                 "products.is_bestseller AS is_bestseller",
                 "products.is_discount AS is_discount",
@@ -200,7 +199,6 @@ router.get("/", async(req, res, next)=>{
                 price: product.price,
                 discountPrice: product.discount_price,
                 imageUrl: product.image_url,
-                isFeatured: product.is_featured,
                 isNewArrival: product.is_new_arrival,
                 isBestseller: product.is_bestseller,
                 isDiscount: product.is_discount
