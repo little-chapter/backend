@@ -157,7 +157,7 @@ router.post("/log-in", async (req, res) => {
         is_admin: user.is_admin,
       },
       jwtSecret,
-      { expiresIn: 86400 } // 24 小時 (24*60*60 秒)
+      { expiresIn: process.env.JWT_EXPIRES_DAY || "30d" }
     );
 
     // 回傳登入成功訊息與使用者資訊
@@ -172,7 +172,7 @@ router.post("/log-in", async (req, res) => {
           role: user.role,
         },
         token: token,
-        expiresIn: 86400,
+        expiresIn: 2592000,
       },
     });
   } catch (error) {
