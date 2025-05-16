@@ -18,7 +18,7 @@ function formatDateToYYYYMMDD(dateString) {
   return `${year}-${month}-${day}`;
 }
 
-// 管理者取得分類列表 API
+// 管理者取得分類列表
 router.get("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
     // 預處理參數，將空字串轉為 undefined
@@ -127,6 +127,56 @@ router.get("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
     next(error);
   }
 });
+
+// 管理者取得類別詳細資訊
+router.get(
+  "/categories/:categoryId",
+  verifyToken,
+  verifyAdmin,
+  async (req, res, next) => {
+    try {
+      const { categoryId } = req.params;
+
+      // 驗證categoryId是否為有效整數
+      if (isNotValidInteger(Number(categoryId)) || Number(categoryId) <= 0) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      // 查詢指定ID的分類資訊
+      const category = await dataSource.getRepository("Categories").findOne({
+        where: { id: Number(categoryId) },
+      });
+
+      // 如果找不到該分類，返回404
+      if (!category) {
+        return res.status(404).json({
+          status: false,
+          message: "查無此分類資料",
+        });
+      }
+
+      // 格式化響應數據
+      const formattedCategory = {
+        categoryId: category.id,
+        name: category.name,
+        description: category.description || "", // 處理可能為null的情況
+        status: category.is_visible ? "Enabled" : "Disabled",
+      };
+
+      // 返回分類詳細資訊
+      res.status(200).json({
+        status: true,
+        data: formattedCategory,
+      });
+    } catch (error) {
+      logger.error("取得類別詳細資訊失敗:", error);
+      next(error);
+    }
+  }
+);
 
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
