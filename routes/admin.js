@@ -324,7 +324,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
     }
 })
 //更新訂單狀態
-router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, res, next) =>{
+router.put("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, res, next) =>{
     try{
         const {orderNumber} = req.params;
         const {orderStatus, statusNote} = req.body;

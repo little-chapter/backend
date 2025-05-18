@@ -323,6 +323,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         const order = generateTradeInfo(finalAmount, email, orderNumber);
         res.status(200).json({
             status: true,
+            message: "轉向第三方金流處理付款",
             data: order,
             // redirectUrl:
         })
