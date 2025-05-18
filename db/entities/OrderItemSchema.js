@@ -33,12 +33,6 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false,
         },
-        discount_price: {
-            type: "numeric",
-            precision: 10,
-            scale: 2,
-            nullable: true,
-        },
         subtotal: {
             type: "numeric",
             precision: 10,
