@@ -20,7 +20,7 @@ module.exports = new EntitySchema({
             nullable: false,
             unique: true
         },
-        transaction_id: {
+        transaction_number: {
             type: "varchar",
             length: 100,
             nullable: false,
@@ -84,6 +84,11 @@ module.exports = new EntitySchema({
         auth_code: {
             type: "varchar",
             length: 20,
+            nullable: true,
+        },
+        card_start6: {
+            type: "varchar",
+            length: 6,
             nullable: true,
         },
         card_last4: {
