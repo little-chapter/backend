@@ -9,6 +9,7 @@ const {
   isValidEmail,
 } = require("../utils/validUtils");
 const { verifyToken, verifyAdmin } = require("../middlewares/auth");
+const { Not } = require("typeorm");
 
 function formatDateToYYYYMMDD(dateString) {
   const date = new Date(dateString);
@@ -260,6 +261,117 @@ router.post("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
     next(error);
   }
 });
+
+// 管理者編輯商品分類
+router.put(
+  "/categories/:categoryId",
+  verifyToken,
+  verifyAdmin,
+  async (req, res, next) => {
+    try {
+      const { categoryId } = req.params;
+      const { name, description, status } = req.body;
+
+      // 驗證categoryId是否為有效整數
+      if (isNotValidInteger(Number(categoryId)) || Number(categoryId) <= 0) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      // 驗證必要欄位是否存在
+      if (!name || !description || !status) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      // 驗證欄位格式
+      if (isNotValidString(name) || name.length < 4 || name.length > 10) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      if (isNotValidString(description) || description.length > 100) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      if (
+        isNotValidString(status) ||
+        !["Enabled", "Disabled"].includes(status)
+      ) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      // 檢查分類是否存在
+      const existingCategory = await dataSource
+        .getRepository("Categories")
+        .findOne({
+          where: { id: Number(categoryId) },
+        });
+
+      if (!existingCategory) {
+        return res.status(404).json({
+          status: false,
+          message: "查無此分類資料",
+        });
+      }
+
+      // 檢查分類名稱是否與其他分類重複
+      const duplicateCategory = await dataSource
+        .getRepository("Categories")
+        .findOne({
+          where: { name, id: Not(Number(categoryId)) },
+        });
+
+      if (duplicateCategory) {
+        return res.status(400).json({
+          status: false,
+          message: "商品分類名稱已存在",
+        });
+      }
+
+      // 轉換 status 為 is_visible
+      const is_visible = status === "Enabled";
+
+      // 更新分類
+      existingCategory.name = name;
+      existingCategory.description = description;
+      existingCategory.is_visible = is_visible;
+
+      // 儲存到資料庫
+      const updatedCategory = await dataSource
+        .getRepository("Categories")
+        .save(existingCategory);
+
+      // 格式化回傳資料
+      const responseData = {
+        categoryId: updatedCategory.id,
+        name: updatedCategory.name,
+        description: updatedCategory.description,
+        status: updatedCategory.is_visible ? "Enabled" : "Disabled",
+      };
+
+      return res.status(200).json({
+        status: true,
+        data: responseData,
+      });
+    } catch (error) {
+      logger.error("編輯商品分類失敗:", error);
+      next(error);
+    }
+  }
+);
 
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
