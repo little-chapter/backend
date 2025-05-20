@@ -373,6 +373,63 @@ router.put(
   }
 );
 
+// 管理者刪除商品分類
+router.delete(
+  "/categories/:categoryId",
+  verifyToken,
+  verifyAdmin,
+  async (req, res, next) => {
+    try {
+      const { categoryId } = req.params;
+
+      // 驗證categoryId是否為有效整數
+      if (isNotValidInteger(Number(categoryId)) || Number(categoryId) <= 0) {
+        return res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符",
+        });
+      }
+
+      // 檢查分類是否存在
+      const existingCategory = await dataSource
+        .getRepository("Categories")
+        .findOne({
+          where: { id: Number(categoryId) },
+        });
+
+      if (!existingCategory) {
+        return res.status(404).json({
+          status: false,
+          message: "查無此分類資料",
+        });
+      }
+
+      // 檢查分類是否有關聯的商品
+      const productsCount = await dataSource.getRepository("Products").count({
+        where: { category_id: Number(categoryId) },
+      });
+
+      if (productsCount > 0) {
+        return res.status(409).json({
+          status: false,
+          message: "無法刪除商品分類，請檢查分類是否仍有商品",
+        });
+      }
+
+      // 執行刪除操作
+      await dataSource.getRepository("Categories").delete(Number(categoryId));
+
+      return res.status(200).json({
+        status: true,
+        message: "刪除成功",
+      });
+    } catch (error) {
+      logger.error("刪除商品分類失敗:", error);
+      next(error);
+    }
+  }
+);
+
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
     const allowedFilters = {
