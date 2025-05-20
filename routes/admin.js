@@ -106,7 +106,7 @@ router.get("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
     const formattedCategories = categories.map((category) => ({
       id: category.id,
       name: category.name,
-      books_count: parseInt(category.books_count),
+      booksCount: parseInt(category.books_count),
       status: category.is_visible ? "Enabled" : "Disabled",
     }));
 
