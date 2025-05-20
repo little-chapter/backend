@@ -178,6 +178,89 @@ router.get(
   }
 );
 
+// 管理者新增商品分類
+router.post("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
+  try {
+    const { name, description, status } = req.body;
+
+    // 驗證必要欄位是否存在
+    if (!name || !description || !status) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 驗證欄位格式
+    if (isNotValidString(name) || name.length < 4 || name.length > 10) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    if (isNotValidString(description) || description.length > 100) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    if (isNotValidString(status) || !["Enabled", "Disabled"].includes(status)) {
+      return res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符",
+      });
+    }
+
+    // 檢查分類名稱是否已存在
+    const existingCategory = await dataSource
+      .getRepository("Categories")
+      .findOne({
+        where: { name },
+      });
+
+    if (existingCategory) {
+      return res.status(400).json({
+        status: false,
+        message: "商品分類名稱已存在",
+      });
+    }
+
+    // 轉換 status 為 is_visible
+    const is_visible = status === "Enabled";
+
+    // 建立新分類
+    const newCategory = dataSource.getRepository("Categories").create({
+      name,
+      description,
+      is_visible,
+      display_order: 1, // 使用預設值
+    });
+
+    // 儲存到資料庫
+    const savedCategory = await dataSource
+      .getRepository("Categories")
+      .save(newCategory);
+
+    // 格式化回傳資料
+    const responseData = {
+      categoryId: savedCategory.id,
+      name: savedCategory.name,
+      description: savedCategory.description,
+      status: savedCategory.is_visible ? "Enabled" : "Disabled",
+    };
+
+    return res.status(200).json({
+      status: true,
+      data: responseData,
+    });
+  } catch (error) {
+    logger.error("新增商品分類失敗:", error);
+    next(error);
+  }
+});
+
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
     const allowedFilters = {
@@ -632,4 +715,5 @@ router.post(
     }
   }
 );
+
 module.exports = router;
