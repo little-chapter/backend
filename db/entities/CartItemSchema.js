@@ -1,22 +1,29 @@
 const { EntitySchema } = require("typeorm");
 
 module.exports = new EntitySchema({
-    name: "CartItem",
-    tableName: "CART_ITEM",
+    name: "CartItems",
+    tableName: "cart_items",
     columns:{
         id:{
             primary: true,
             type: "integer",
             generated: "increment",
         },
-        session_id:{ // 這是要做什麼用？
-            type: "varchar",
-            length: 100,
+        user_id: {
+            type: "uuid",
             nullable: false,
+        },
+        // session_id:{
+        //     type: "varchar",
+        //     length: 100,
+        //     nullable: false,
+        // },
+        product_id:{
+            type: "integer",
+            nullable: false
         },
         quantity:{
             type: "integer",
-            length: 50,
             default: 1,
             nullable: false,
         },
@@ -37,17 +44,27 @@ module.exports = new EntitySchema({
             onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,
         },
-        relations:{ //不懂是不是這樣寫
-            user_id: { 
-                type: "many-to-one",
-                target: "User",
-                joinColumn: true 
+    },
+    relations:{
+        User: {
+            target: "User",
+            type: "many-to-one",
+            joinColumn: {
+                name: "user_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "cart_items_user_id_fk"
             },
-            product_id: { 
-                type: "many-to-one", 
-                target: "Products", 
-                joinColumn: true 
+            onDelete:"RESTRICT"
+        },
+        Products: {
+            target: "Products",
+            type: "many-to-one",
+            joinColumn: {
+                name: "product_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "cart_items_product_id_fk"
             },
-        }
-    }
-})
+            onDelete:"CASCADE"
+        },
+    },
+});

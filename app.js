@@ -2,13 +2,13 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const pinoHttp = require("pino-http");
-
 const logger = require("./utils/logger")("App");
 const usersRouter = require("./routes/users");
 const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
 const homepageRouter = require("./routes/homepage");
 const adminRouter = require("./routes/admin");
+const cartRouter = require("./routes/cart");
 
 const app = express();
 app.use(cors());
@@ -25,6 +25,7 @@ app.use(
     },
   })
 );
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/healthcheck", (req, res) => {
@@ -36,6 +37,7 @@ app.use("/api/products", productsRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/homepage", homepageRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/cart", cartRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({
