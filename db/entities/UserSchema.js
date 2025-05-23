@@ -76,11 +76,11 @@ module.exports = new EntitySchema({
       nullable: true,
     },
     created_at: {
-      type: "timestamp",
+      type: "timestamptz",
       default: () => "CURRENT_TIMESTAMP",
     },
     updated_at: {
-      type: "timestamp",
+      type: "timestamptz",
       default: () => "CURRENT_TIMESTAMP",
       onUpdate: "CURRENT_TIMESTAMP",
     },
