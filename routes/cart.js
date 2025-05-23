@@ -5,7 +5,7 @@ const logger = require('../utils/logger')('Cart');
 const { verifyToken } = require("../middlewares/auth");
 const {isNotValidString, isNotValidInteger} = require("../utils/validUtils");
 
-// 查看購物車
+// 取得購物車商品
 router.get("/", verifyToken, async(req, res, next)=> {
     // 從資料表 cartItems 依據 userId 取得該用戶資料，商品排序為越晚加入購物車的會越前面
     try{
@@ -13,27 +13,35 @@ router.get("/", verifyToken, async(req, res, next)=> {
         const cartItemsRepo = dataSource.getRepository("CartItems");
         const findCartItems = await cartItemsRepo.find({
             where: {"user_id": userId},
-            relations :[ "Products" ],
+            relations :[ "Products", "Products.ProductImages"],
             order:{ "updated_at": "DESC"}
         });
-        const result = findCartItems.map((item)=> ({
-            "cartItemId": item.id,
-            "productId": item.Products.id,
-            "productsTitle": item.Products.title,
-            "price": item.Products.price,
-            "discountPrice": item.Products.discount_price,
-            "quantity": item.quantity,   
-            "subtotal": parseFloat(
-                            item.Products.is_discount 
-                            ? item.Products.discount_price 
-                            : item.price) * item.quantity,
-            "stockQuantity": item.Products.stock_quantity,
-        }));
+        const result = findCartItems.map((item)=> {
+            const product = item.Products;
+            const primaryImage = product.ProductImages.find(img => img.is_primary);
+            return{
+                "imageUrl": primaryImage ? primaryImage.image_url : null,
+                "cartItemId": item.id,
+                "productId": product.id,
+                "title": product.title,
+                "price": Number(product.price),
+                "discountPrice": Number(product.discount_price),
+                "quantity": item.quantity,   
+                "stockQuantity": product.stock_quantity,
+                "subtotal": parseFloat(
+                                product.is_discount 
+                                ? product.discount_price 
+                                : item.price) * item.quantity,
+            };
+        });
 
         res.status(200).json({
             "status": "true",
             "message": "成功取得購物車",
-            "data": result
+            "data": {
+                "items":result
+            }
+            
         });
     }catch(error){
         logger.error("取得購物車失敗: ", error);
@@ -81,7 +89,7 @@ router.post("/", verifyToken, async(req, res, next)=> {
             });
             return;
         }else if(findProduct.stock_quantity < quantity){
-            res.status(404).json({
+            res.status(409).json({
                 "status": "false",
                 "message": `該商品庫存不足，目前僅剩 ${findProduct.stock_quantity} 本`,
                 "available_stock": findProduct.stock_quantity
@@ -109,7 +117,7 @@ router.post("/", verifyToken, async(req, res, next)=> {
         if (findCartItem) {
             addedCartItemQuantity = quantity + findCartItem.quantity;
             if(findProduct.stock_quantity < addedCartItemQuantity){
-                res.status(404).json({
+                res.status(409).json({
                     "status": "false",
                     "message": "該商品庫存不足",
                 });   
@@ -175,11 +183,11 @@ router.put("/:productId", verifyToken, async(req, res, next)=> {
         if(!findProduct){
             res.status(404).json({
                 "status": "false",
-                "message": "找不到該商品 id"                
+                "message": "找不到此商品於您的購物車中"                
             });
             return;
         }else if(findProduct.stock_quantity < quantity){
-            res.status(404).json({
+            res.status(409).json({
                 "status": "false",
                 "message": `該商品庫存不足，目前僅剩 ${findProduct.stock_quantity} 本`,
                 "available_stock": findProduct.stock_quantity
@@ -232,7 +240,7 @@ router.put("/:productId", verifyToken, async(req, res, next)=> {
     }
 });
 
-// 刪除購物車內指定商品
+// 移除購物車內指定商品
 router.delete("/:productId", verifyToken, async(req, res, next)=> {
     // 提取使用者輸入的資料
     // 判斷 1: 使用者輸入的資料是否符合格式
@@ -260,16 +268,16 @@ router.delete("/:productId", verifyToken, async(req, res, next)=> {
         } else{
             res.status(404).json({
                 "status": "false",
-                "message": "購物車沒有該商品"
+                "message": "找不到指定商品於購物車中"
             });
         }
         res.status(200).json({
             "status": "true",
-            "message": "購物車商品刪除成功"
+            "message": "商品已成功從購物車中移除"
         });
 
     }catch(error){
-        logger.error("刪除購物車商品失敗: ", error);
+        logger.error("移除購物車商品失敗: ", error);
         next(error);        
     }
 });
