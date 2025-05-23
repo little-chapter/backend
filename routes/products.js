@@ -392,12 +392,16 @@ router.get("/:productId", async(req, res, next)=>{
             .createQueryBuilder("images")
             .select([
                 "images.image_url AS image_url",
+                "images.is_primary AS is_primary"
             ])
             .where("images.product_id =:productId", {productId: existProduct.id})
             .orderBy("display_order")
             .getRawMany();
         const productImages = allImages.map(image =>{
-            return image.image_url
+            return {
+                imageUrl: image.image_url,
+                isPrimary: image.is_primary
+            }
         })
         existProduct.imageUrls = (productImages) ? productImages : null;
         res.status(200).json({

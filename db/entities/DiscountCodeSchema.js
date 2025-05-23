@@ -37,16 +37,12 @@ module.exports = new EntitySchema({
             default: 0,
         },
         start_date: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
         },
         end_date: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
-        },
-        usage_limit: {
-            type: "integer",
-            nullable: true
         },
         used_count: {
             type: "integer",
@@ -59,13 +55,13 @@ module.exports = new EntitySchema({
             default: true,
         },
         created_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
         created_by: {
             type: "uuid",
-            nullable: false
+            nullable: true
         }
     },
     relations:{
