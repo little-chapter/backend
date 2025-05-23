@@ -72,6 +72,11 @@ module.exports = new EntitySchema({
             length: 20,
             nullable: false,
         },
+        carrier_number: {
+            type: "varchar",
+            length: 10,
+            nullable: true,
+        },
         shipping_method: {
             type: "varchar",
             length: 50,
