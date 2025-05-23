@@ -362,7 +362,6 @@ router.get("/:productId", async(req, res, next)=>{
             .select([
                 "products.id AS id",
                 "products.title AS title",
-                "products.description AS description",
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "products.stock_quantity AS stock_quantity",
@@ -409,7 +408,6 @@ router.get("/:productId", async(req, res, next)=>{
             data: {
                 productId: existProduct.id,
                 title: existProduct.title,
-                description: existProduct.description,
                 price: existProduct.price,
                 discountPrice: existProduct.discount_price,
                 stockQuantity: existProduct.stock_quantity,
