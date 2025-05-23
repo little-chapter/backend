@@ -2,18 +2,113 @@ const express = require("express");
 const router = express.Router();
 const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Admin');
-const {isNotValidString, isNotValidInteger, isValidDateStr, isValidEmail} = require("../utils/validUtils")
-const {verifyToken, verifyAdmin} = require("../middlewares/auth")
-
-function formatDateToYYYYMMDD(dateString){
+const { isNotValidString, isNotValidInteger, isValidDateStr, isValidEmail } = require("../utils/validUtils")
+const { verifyToken, verifyAdmin } = require("../middlewares/auth")
+// 
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+// 
+function formatDateToYYYYMMDD(dateString) {
     const date = new Date(dateString);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0"); // 月份從 0 開始，所以要 + 1，並補零
     const day = String(date.getDate()).padStart(2, "0"); // 補零
     return `${year}-${month}-${day}`;
 }
-router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
-    try{
+
+// 管理者登入
+router.post("/log-in", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // 驗證 Email 格式
+        if (!email || !isValidEmail(email)) {
+            return res.status(400).json({
+                status: false,
+                message: "請輸入有效的 Email",
+            });
+        }
+
+        // 驗證密碼格式（8-16 個英數字元）
+        const passwordRegex = /^[A-Za-z0-9]{8,16}$/;
+        if (!password || !passwordRegex.test(password)) {
+            return res.status(400).json({
+                status: false,
+                message: "密碼格式錯誤，請輸入8-16個英數字元，區分英文大小寫",
+            });
+        }
+
+        const userRepo = dataSource.getRepository("User");
+        const user = await userRepo
+            .createQueryBuilder("user")
+            .addSelect("user.password") // 預設 select: false，要顯式加入
+            .where("user.email = :email", { email })
+            .andWhere("user.is_admin = true") // 限定管理者
+            .getOne();
+
+        if (!user) {
+            return res.status(404).json({
+                status: false,
+                message: "此 Email 尚未註冊或不具備管理權限",
+            });
+        }
+
+        if (!user.is_active) {
+            return res.status(403).json({
+                status: false,
+                message: "帳戶未驗證，請先驗證 Email",
+            });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({
+                status: false,
+                message: "Email 或密碼錯誤",
+            });
+        }
+
+        // 建立 JWT payload
+        const payload = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+        };
+        console.log(`payload: ${payload}`);
+
+        const expiresInSeconds = 86400; // 1 天
+        const token = jwt.sign(payload, process.env.JWT_SECRET, {
+            expiresIn: expiresInSeconds,
+        });
+
+        res.status(200).json({
+            status: true,
+            message: `管理員${payload.email}登入成功`,
+            data: {
+                user: {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                },
+                token,
+                expiresIn: 86400,
+            },
+        });
+
+    } catch (error) {
+        logger.error("管理者登入錯誤:", error);
+        res.status(500).json({
+            status: false,
+            message: "伺服器錯誤，請稍後再試",
+        });
+    }
+});
+
+// 取得訂單列表
+router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
         const allowedFilters = {
             page: "number",
             limit: "number",
@@ -36,8 +131,8 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
         }
         const allowedSortOrder = ["DESC", "ASC"]
         const filters = req.query;
-        for(const key of Object.keys(filters)){
-            if(!(key in allowedFilters)){
+        for (const key of Object.keys(filters)) {
+            if (!(key in allowedFilters)) {
                 res.status(400).json({
                     status: false,
                     message: "不支援的搜尋條件",
@@ -46,8 +141,8 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
             }
             const exceptedType = allowedFilters[key];
             const value = filters[key];
-            if(exceptedType === "number"){
-                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+            if (exceptedType === "number") {
+                if (!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -55,8 +150,8 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
                     return
                 }
             }
-            if(exceptedType === "string"){
-                if(!value || isNotValidString(value)){
+            if (exceptedType === "string") {
+                if (!value || isNotValidString(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -64,49 +159,49 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
                     return
                 }
                 //日期格式驗證
-                if((key === "startDate" || key === "endDate") && !isValidDateStr(value)){
+                if ((key === "startDate" || key === "endDate") && !isValidDateStr(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
                     })
                     return
                 }
-                if(key === "orderStatus" && !allowedOrderStatus.includes(value)){
+                if (key === "orderStatus" && !allowedOrderStatus.includes(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
                     })
                     return
                 }
-                if(key === "paymentStatus" && !allowedPaymentStatus.includes(value)){
+                if (key === "paymentStatus" && !allowedPaymentStatus.includes(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
                     })
                     return
                 }
-                if(key === "shippingStatus" && !allowedShippingStatus.includes(value)){
+                if (key === "shippingStatus" && !allowedShippingStatus.includes(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
                     })
                     return
                 }
-                if(key === "userEmail" && !isValidEmail(value)){
+                if (key === "userEmail" && !isValidEmail(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
                     })
                     return
                 }
-                if(key === "sortBy" && !(value in allowedSortBy)){
+                if (key === "sortBy" && !(value in allowedSortBy)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符"
                     })
                     return
                 }
-                if(key === "sortOrder" && !(allowedSortOrder.includes(value.toUpperCase()))){
+                if (key === "sortOrder" && !(allowedSortOrder.includes(value.toUpperCase()))) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -128,8 +223,8 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
                 "orders.created_at AS created_at",
             ])
         //起始日期 結束日期
-        if(filters.startDate && filters.endDate){
-            if(filters.startDate > filters.endDate){
+        if (filters.startDate && filters.endDate) {
+            if (filters.startDate > filters.endDate) {
                 res.status(400).json({
                     status: false,
                     message: "欄位資料格式不符"
@@ -139,45 +234,45 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
             const start = new Date(filters.startDate + "T00:00:00.000")
             const end = new Date(filters.endDate + "T23:59:59.999")
             orderQuery = orderQuery
-                .andWhere("orders.created_at BETWEEN :start AND :end", {start: start, end: end})
+                .andWhere("orders.created_at BETWEEN :start AND :end", { start: start, end: end })
         }
-        if(filters.startDate && !filters.endDate){
+        if (filters.startDate && !filters.endDate) {
             const start = new Date(filters.startDate + "T00:00:00.000")
             orderQuery = orderQuery
-                .andWhere("orders.created_at >=:start", {start: start})
+                .andWhere("orders.created_at >=:start", { start: start })
         }
-        if(!filters.startDate && filters.endDate){
+        if (!filters.startDate && filters.endDate) {
             const end = new Date(filters.endDate + "T23:59:59.999")
             orderQuery = orderQuery
-                .andWhere("orders.created_at <=:end", {end: end})
+                .andWhere("orders.created_at <=:end", { end: end })
         }
-        if(filters.orderStatus){
+        if (filters.orderStatus) {
             orderQuery = orderQuery
-                .andWhere("orders.order_status =:orderStatus", {orderStatus: filters.orderStatus})
+                .andWhere("orders.order_status =:orderStatus", { orderStatus: filters.orderStatus })
         }
-        if(filters.paymentStatus){
+        if (filters.paymentStatus) {
             orderQuery = orderQuery
-                .andWhere("orders.payment_status =:paymentStatus", {paymentStatus: filters.paymentStatus})
+                .andWhere("orders.payment_status =:paymentStatus", { paymentStatus: filters.paymentStatus })
         }
-        if(filters.shippingStatus){
+        if (filters.shippingStatus) {
             orderQuery = orderQuery
-                .andWhere("orders.shipping_status =:shippingStatus", {shippingStatus: filters.shippingStatus})
+                .andWhere("orders.shipping_status =:shippingStatus", { shippingStatus: filters.shippingStatus })
         }
-        if(filters.userEmail){
+        if (filters.userEmail) {
             orderQuery = orderQuery
-                .andWhere("user.email =:Email", {Email: filters.userEmail})
+                .andWhere("user.email =:Email", { Email: filters.userEmail })
         }
-        if(filters.orderNumber){
+        if (filters.orderNumber) {
             orderQuery = orderQuery
-                .andWhere("orders.order_number =:orderNumber", {orderNumber: filters.orderNumber})
+                .andWhere("orders.order_number =:orderNumber", { orderNumber: filters.orderNumber })
         }
         //排序依據
         let sortBy = "created_at";
         let sortOrder = "DESC";
-        if(filters.sortBy){
+        if (filters.sortBy) {
             sortBy = allowedSortBy[filters.sortBy]
         }
-        if(filters.sortOrder){
+        if (filters.sortOrder) {
             sortOrder = filters.sortOrder.toUpperCase();
         }
         orderQuery = orderQuery.orderBy(`orders.${sortBy}`, sortOrder)
@@ -187,14 +282,14 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
         //分頁
         let page = 1;
         let limit = 20;
-        if(filters.page && Number(filters.page) > page){
+        if (filters.page && Number(filters.page) > page) {
             page = Number(filters.page);
         }
-        if(filters.limit && Number(filters.limit) >= 1){
+        if (filters.limit && Number(filters.limit) >= 1) {
             limit = Number(filters.limit);
         }
         const totalPages = Math.max(1, Math.ceil(count / limit));
-        if(page > totalPages){
+        if (page > totalPages) {
             page = totalPages;
         }
         const skip = (page - 1) * limit;
@@ -202,7 +297,7 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
             .offset(skip)
             .limit(limit)
             .getRawMany()
-        const ordersResult = ordersData.map(order =>{
+        const ordersResult = ordersData.map(order => {
             return {
                 orderNumber: order.order_number,
                 userName: order.username,
@@ -224,24 +319,25 @@ router.get("/orders", verifyToken, verifyAdmin, async(req, res, next) =>{
                 orders: ordersResult
             }
         })
-    }catch(error){
+    } catch (error) {
         logger.error('取得用戶訂單列表錯誤:', error);
         next(error);
     }
 })
 
-router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, next) =>{
-    try{
-        const {orderNumber} = req.params;
-        if(!orderNumber || isNotValidString(orderNumber)){
+// 取得訂單詳細資料
+router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { orderNumber } = req.params;
+        if (!orderNumber || isNotValidString(orderNumber)) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
             })
             return
         }
-        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
-        if(!existOrder){
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({ order_number: orderNumber });
+        if (!existOrder) {
             res.status(404).json({
                 status: false,
                 message: "找不到此訂單"
@@ -250,7 +346,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
         }
         const orderData = await dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
-            .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", {merchantOrderNo: orderNumber})
+            .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", { merchantOrderNo: orderNumber })
             .select([
                 "orders.id AS id",
                 "orders.order_number AS order_number",
@@ -272,7 +368,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
                 "orders.store_code AS store_code",
                 "orders.store_name AS store_name",
             ])
-            .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+            .where("orders.order_number =:orderNumber", { orderNumber: orderNumber })
             .getRawOne();
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
@@ -282,9 +378,9 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
                 "orderItems.price AS price",
                 "orderItems.subtotal AS subtotal"
             ])
-            .where("orderItems.order_id =:orderId", {orderId: orderData.id})
+            .where("orderItems.order_id =:orderId", { orderId: orderData.id })
             .getRawMany()
-        const itemsResult = orderItems.map(item =>{
+        const itemsResult = orderItems.map(item => {
             return {
                 productTitle: item.title,
                 quantity: item.quantity,
@@ -318,42 +414,43 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async(req, res, nex
                 items: itemsResult
             }
         })
-    }catch(error){
+    } catch (error) {
         logger.error('取得用戶訂單詳細錯誤:', error);
         next(error);
     }
 })
+
 //更新訂單狀態
-router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, res, next) =>{
-    try{
-        const {orderNumber} = req.params;
-        const {orderStatus, statusNote} = req.body;
-        if(!orderNumber || isNotValidString(orderNumber) || !orderStatus || isNotValidString(orderStatus)){
+router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { orderNumber } = req.params;
+        const { orderStatus, statusNote } = req.body;
+        if (!orderNumber || isNotValidString(orderNumber) || !orderStatus || isNotValidString(orderStatus)) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
             })
             return
         }
-        if(statusNote && typeof statusNote !== "string"){
+        if (statusNote && typeof statusNote !== "string") {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
             })
             return
         }
-        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
-        if(!existOrder){
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({ order_number: orderNumber });
+        if (!existOrder) {
             res.status(404).json({
                 status: false,
                 message: "找不到該訂單"
             })
             return
         }
-        if((orderStatus === "shipped" && existOrder.order_status === "pending" && existOrder.payment_status === "paid" && existOrder.shipping_status === "notReceived")
+        if ((orderStatus === "shipped" && existOrder.order_status === "pending" && existOrder.payment_status === "paid" && existOrder.shipping_status === "notReceived")
             || (orderStatus === "completed" && existOrder.order_status === "shipped" && existOrder.payment_status === "paid" && existOrder.shipping_status === "delivered")
             || (orderStatus === "cancelled" && existOrder.order_status === "pending" && existOrder.payment_status === "paid" && existOrder.shipping_status === "notReceived")
-            || (orderStatus === "cancelled" && existOrder.order_status === "completed" && existOrder.payment_status === "paid" && existOrder.shipping_status === "returned")){
+            || (orderStatus === "cancelled" && existOrder.order_status === "completed" && existOrder.payment_status === "paid" && existOrder.shipping_status === "returned")) {
             const result = await dataSource.getRepository("Orders")
                 .createQueryBuilder("orders")
                 .update()
@@ -363,9 +460,9 @@ router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, 
                     cancelled_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 })
-                .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+                .where("orders.order_number =:orderNumber", { orderNumber: orderNumber })
                 .execute()
-            if(result.affected !== 1){
+            if (result.affected !== 1) {
                 res.status(422).json({
                     status: false,
                     message: "訂單更新失敗"
@@ -376,13 +473,13 @@ router.post("/orders/:orderNumber/status", verifyToken, verifyAdmin, async(req, 
                 status: true,
                 message: "訂單狀態更新成功"
             })
-        }else{
+        } else {
             res.status(400).json({
                 status: false,
                 message: "無效的訂單狀態或狀態轉換不被允許"
             })
         }
-    }catch(error){
+    } catch (error) {
         logger.error('更新用戶訂單狀態錯誤:', error);
         next(error);
     }

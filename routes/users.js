@@ -14,7 +14,7 @@ const { verifyToken } = require("../middlewares/auth");
 // 用戶註冊
 router.post("/sign-up", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, is_admin } = req.body;
 
     // 驗證電子郵件格式
     const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -81,7 +81,7 @@ router.post("/sign-up", async (req, res) => {
     console.error("Error registering user:", error);
     res.status(500).json({
       status: false,
-      message: "伺服器錯誤，請稍後再試",
+      message: error.message || "伺服器錯誤，請稍後再試",
     });
   }
 });
