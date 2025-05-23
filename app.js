@@ -9,6 +9,8 @@ const ordersRouter = require("./routes/orders");
 const homepageRouter = require("./routes/homepage");
 const adminRouter = require("./routes/admin");
 const cartRouter = require("./routes/cart");
+const checkoutRouter = require("./routes/checkout");
+const paymentRouter = require("./routes/payment");
 
 const app = express();
 app.use(cors());
@@ -38,6 +40,8 @@ app.use("/api/orders", ordersRouter);
 app.use("/api/homepage", homepageRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/cart", cartRouter);
+app.use("/api/checkout", checkoutRouter);
+app.use("/api/payment", paymentRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({

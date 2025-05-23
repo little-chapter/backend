@@ -73,10 +73,9 @@ module.exports = new EntitySchema({
             type: "integer",
             nullable: false,
         },
-        is_featured: {
-            type: "boolean",
-            nullable: false,
-            default: false,
+        introduction_html: {
+            type: "text",
+            nullable: true,
         },
         is_new_arrival: {
             type: "boolean",

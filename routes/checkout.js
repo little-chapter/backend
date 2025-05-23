@@ -1,0 +1,336 @@
+const express = require("express");
+const router = express.Router();
+const { dataSource } = require("../db/data-source");
+const { verifyToken } = require("../middlewares/auth");
+const logger = require('../utils/logger')('Checkout');
+const {isNotValidString, isNotValidInteger, isValidEmail} = require("../utils/validUtils");
+const {isUUID} = require("validator");
+const crypto = require('crypto');
+
+const { 
+    HASHKEY, 
+    HASHIV, 
+    MerchantID, 
+    Version, 
+    PayGateWay, 
+    ReturnUrl, 
+    NotifyUrl
+} = process.env;
+
+function generateTradeInfo(finalAmount, email, orderNumber) {
+    const data = {
+        MerchantID: MerchantID,
+        RespondType: 'JSON',
+        TimeStamp: Date.now().toString(),
+        Version: Version,
+        MerchantOrderNo: orderNumber,
+        Amt: parseInt(finalAmount),
+        ItemDesc: "Little Chapter親子繪本商品",
+        TradeLimit: 900,
+        Email: email,
+        ReturnURL: ReturnUrl,
+        NotifyURL: NotifyUrl,
+    };
+    console.log('藍新TradeInfo',data)
+    const tradeInfoStr = `MerchantID=${MerchantID}&RespondType=${data.RespondType}&TimeStamp=${data.TimeStamp}&Version=${data.Version}&MerchantOrderNo=${data.MerchantOrderNo}&Amt=${data.Amt}&ItemDesc=${encodeURIComponent(data.ItemDesc)}&Email=${encodeURIComponent(data.Email)}&ReturnURL=${encodeURIComponent(ReturnUrl)}&NotifyURL=${encodeURIComponent(NotifyUrl)}`;
+    console.log('原始訊息:',tradeInfoStr)
+    const encrypted = encryptAES(tradeInfoStr);
+    console.log('AES加密訊息:',encrypted)
+    const tradeSha = sha256(`HashKey=${HASHKEY}&${encrypted}&HashIV=${HASHIV}`).toUpperCase();
+    console.log('SHA加密訊息:',tradeSha)
+    return {
+        MerchantID: MerchantID,
+        TradeInfo: encrypted,
+        TradeSha: tradeSha,
+        Version: Version,
+        PayGateWay: PayGateWay
+    }
+}
+
+function encryptAES(data) {
+    const cipher = crypto.createCipheriv('aes-256-cbc', HASHKEY, HASHIV);
+    let encrypted = cipher.update(data, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return encrypted;
+}
+
+function sha256(str) {
+    return crypto.createHash('sha256').update(str).digest('hex');
+}
+
+router.post("/", verifyToken, async(req, res, next)=>{
+    try{
+        let {totalAmount, discountAmount, shippingFee, finalAmount, discountCode, items, paymentMethod, shippingMethod,
+            recipientName, recipientEmail, recipientPhone, shippingAddress, invoiceType, note
+        } = req.body;
+        const {id, email} = req.user;
+        if(!totalAmount || !finalAmount || !items || !paymentMethod || !shippingMethod || !recipientName
+            || !recipientEmail || !recipientPhone || !shippingAddress || !invoiceType || !id || !email
+        ){
+            res.status(400).json({
+                "status": false,
+                "message": "必要欄位未填寫"
+            })
+            return
+        }
+        if(discountAmount){
+            discountAmount = Number(discountAmount);
+            if(typeof discountAmount !== "number" || discountAmount < 0 || Number.isNaN(discountAmount)){
+                res.status(400).json({
+                    "status": false,
+                    "message": "欄位資料格式不符"
+                })
+                return
+            }
+        }else{
+            discountAmount = 0;
+        };
+        if(shippingFee){
+            shippingFee = Number(shippingFee);
+            if(typeof shippingFee !== "number" || shippingFee < 0  || Number.isNaN(shippingFee)){
+                res.status(400).json({
+                    "status": false,
+                    "message": "欄位資料格式不符"
+                })
+                return
+            }
+        }else{
+            shippingFee = 0;
+        };
+        if(note){
+            note = String(note);
+            if(typeof note !== "string"){
+                res.status(400).json({
+                    "status": false,
+                    "message": "欄位資料格式不符"
+                })
+                return
+            }
+        }else{
+            note = "";
+        }
+        totalAmount = Number(totalAmount);
+        finalAmount = Number(finalAmount);
+        const phoneRegex = /^09\d{8}$/;
+        const allowedPaymentMethod = ["WEBATM", "CREDIT"];
+        const allowedShippingMethod = ["homeDelivery"];
+        const allowedInvoiceType = ["e-invoice", "carrier"];
+        if(isNotValidInteger(totalAmount) || isNotValidInteger(finalAmount) || Number.isNaN(totalAmount) || Number.isNaN(finalAmount) || typeof items !== "object"
+            || isNotValidString(paymentMethod) || !allowedPaymentMethod.includes(paymentMethod.toUpperCase()) || isNotValidString(shippingMethod) || !allowedShippingMethod.includes(shippingMethod)
+            || isNotValidString(recipientName) || isNotValidString(recipientEmail) || !isValidEmail(recipientEmail) || isNotValidString(recipientPhone) || !phoneRegex.test(recipientPhone)
+            || isNotValidString(shippingAddress) || isNotValidString(invoiceType) || !allowedInvoiceType.includes(invoiceType)
+            || isNotValidString(id) || !isUUID(id) || isNotValidString(email) || !isValidEmail(email)
+        ){
+            res.status(400).json({
+                "status": false,
+                "message": "欄位資料格式不符"
+            })
+            return
+        }
+        if((totalAmount - discountAmount + shippingFee) !== finalAmount){
+            res.status(400).json({
+                "status": false,
+                "message": "欄位資料格式不符"
+            })
+            return
+        }
+        if(items.length === 0){
+            res.status(400).json({
+                "status": false,
+                "message": "購物車至少需要一項商品"
+            })
+            return
+        }
+        const existUser = await dataSource.getRepository("User").findOneBy({id: id});
+        if(!existUser){
+            logger.warn("此用戶不存在");
+            res.status(404).json({
+                "status": false,
+                "message": "此用戶不存在"
+            })
+            return
+        }
+        //折扣碼驗證
+        if(discountCode){
+            discountCode = String(discountCode).toUpperCase();
+            if(isNotValidString(discountCode)){
+                logger.warn("欄位資料格式不符");
+                res.status(400).json({
+                    "status": false,
+                    "message": "欄位資料格式不符"
+                })
+                return
+            }
+            //折扣碼是否有效
+            const now = new Date().toISOString();
+            const existCode = await dataSource.getRepository("DiscountCodes")
+                .createQueryBuilder("discountCodes")
+                .where("discountCodes.code =:code", {code: discountCode})
+                .andWhere("discountCodes.start_date <=:startDate", {startDate: now})
+                .andWhere("discountCodes.end_date >:endDate", {endDate: now})
+                .andWhere("discountCodes.is_active =:isActive", {isActive: true})
+                .getOne();
+            if(!existCode || existCode.min_purchase > totalAmount || (existCode.usage_limit && existCode.usage_limit === 0)){
+                logger.warn("折扣碼無效");
+                res.status(400).json({
+                    "status": false,
+                    "message": "折扣碼無效"
+                })
+                return
+            }
+            //用戶是否使用過折扣碼
+            const existUsage = await dataSource.getRepository("DiscountCodeUsages")
+                .createQueryBuilder("codeUsages")
+                .where("codeUsages.code_id =:codeId", {codeId: existCode.id})
+                .andWhere("codeUsages.user_id =:userId", {userId: id})
+                .getOne();
+            if(existUsage){
+                logger.warn("已使用過此折扣碼");
+                res.status(409).json({
+                    "status": false,
+                    "message": "已使用過此折扣碼"
+                })
+                return
+            }
+        }
+        //欲購買商品是否存在
+        const itemsIds = items.map(item =>{
+            return item.productId
+        })
+        const existProducts = await dataSource.getRepository("Products")
+            .createQueryBuilder("product")
+            .select([
+                "product.id AS id",
+                "product.title AS title",
+                "product.stock_quantity AS stock"
+            ])
+            .where("product.id IN (:...ids)", {ids: itemsIds})
+            .getRawMany();
+        const productIds = existProducts.map(product =>{ //資料庫商品ids
+            return product.id
+        })
+        const missingIds = itemsIds.filter(itemId =>{ //檢查不存在的商品
+            return !productIds.includes(itemId)
+        })
+        if(missingIds.length !== 0){
+            logger.warn("部分商品不存在");
+            res.status(400).json({
+                "status": false,
+                "message": "部分商品不存在"
+            })
+            return
+        }
+        //欲購買商品庫存是否足夠
+        const outOfStock = [];
+        items.forEach(item =>{
+            const productId = item.productId;
+            const requestedQTY = item.quantity;
+            existProducts.forEach(product =>{
+                if(product.id === productId && product.stock < requestedQTY){
+                    product.requestedQuantity = requestedQTY;
+                    outOfStock.push(product)
+                }
+            })
+        })
+        if(outOfStock.length !== 0){
+            const outOfStockResult = outOfStock.map(item =>{
+                return {
+                    productId: item.id,
+                    productTitle: item.title,
+                    requestedQuantity: item.requestedQuantity,
+                    availableQuantity: item.stock
+                }
+            })
+            logger.warn("部分商品庫存不足");
+            res.status(400).json({
+                "status": false,
+                "message": "部分商品庫存不足",
+                "errors": outOfStockResult
+            })
+            return
+        }
+        const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0"); //隨機三碼
+        const orderNumber = `ORD${Math.floor(Date.now()/1000)}${randomThreeDigits}`; //建立訂單編號
+        await dataSource.transaction(async (transactionalEntityManager) => {
+            //暫存訂單
+            const pendingOrder = await transactionalEntityManager
+                .createQueryBuilder()
+                .insert()
+                .into("PendingOrders")
+                .values({
+                    user_id: id,
+                    order_number: orderNumber,
+                    status: "pending",
+                    total_amount: totalAmount,
+                    shipping_fee: shippingFee,
+                    discount_amount: discountAmount,
+                    final_amount: finalAmount,
+                    recipient_name: recipientName,
+                    recipient_email: recipientEmail,
+                    recipient_phone: recipientPhone,
+                    invoice_type: invoiceType,
+                    shipping_method: shippingMethod,
+                    shipping_address: shippingAddress,
+                    payment_method: paymentMethod,
+                    note: note,
+                    discount_code: discountCode,
+                    expired_at: new Date(new Date().getTime() + 86400000).toISOString(),
+                })
+                .execute();
+            if(pendingOrder.identifiers.length === 0){
+                logger.warn("新增暫存訂單失敗");
+                res.status(400).json({
+                    status: false,
+                    message: "新增暫存訂單失敗"
+                })
+                return
+            }
+            const pendingOrderId = pendingOrder.identifiers[0].id;
+            //暫存訂單商品關聯
+            const pendingOrderItem = items.map((item, index) =>{
+                existProducts.forEach(product =>{
+                    if(product.id === item.productId){
+                        items[index].title = product.title;
+                    }
+                })
+                return {
+                    pending_order_id: pendingOrderId,
+                    product_id: item.productId,
+                    product_title: item.title,
+                    quantity: item.quantity,
+                    price: item.price,
+                    subtotal: item.price * item.quantity,
+                    expired_at: new Date(Date.now() + 86400000).toISOString()
+                }
+            })
+            const orderItemResult = await transactionalEntityManager
+                .createQueryBuilder()
+                .insert()
+                .into("PendingOrderItems")
+                .values(pendingOrderItem)
+                .execute();
+            if(orderItemResult.identifiers.length === 0){
+                logger.warn("新增暫存訂單商品關聯失敗");
+                res.status(400).json({
+                    status: false,
+                    message: "新增暫存訂單商品關聯失敗"
+                })
+                return
+            }
+        })
+        const existPending = await dataSource.getRepository("PendingOrders").findOneBy({order_number: orderNumber})
+        console.log(existPending)
+        const order = generateTradeInfo(finalAmount, email, orderNumber);
+        res.status(200).json({
+            status: true,
+            message: "轉向第三方金流處理付款",
+            data: order,
+            // redirectUrl:
+        })
+    }catch(error){
+        logger.error('付款結帳錯誤:', error);
+        next(error);
+    }
+})
+
+module.exports = router;

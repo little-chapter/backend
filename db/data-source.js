@@ -13,6 +13,10 @@ const RecommendationProduct = require("./entities/RecommendationProductSchema");
 const RecommendationSection = require("./entities/RecommendationSectionSchema");
 const PaymentTransaction = require("./entities/PaymentTransactionSchema");
 const CartItems = require("./entities/CartItemSchema");
+const DiscountCode = require("./entities/DiscountCodeSchema");
+const DiscountCodeUsage = require("./entities/DiscountCodeUsageSchema");
+const PendingOrder = require("./entities/PendingOrderSchema");
+const PendingOrderItem = require("./entities/PendingOrderItemSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -36,6 +40,10 @@ const dataSource = new DataSource({
     RecommendationSection,
     PaymentTransaction,
     CartItems,
+    DiscountCode,
+    DiscountCodeUsage,
+    PendingOrder,
+    PendingOrderItem,
   ],
   ssl: config.get("db.ssl"),
 });
