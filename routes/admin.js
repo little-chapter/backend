@@ -908,18 +908,18 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) =>{
       if(expectedType === "number"){
         if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
           res.status(400).json({
-          status: false,
-          message: "欄位資料格式不符"
-        })
+            status: false,
+            message: "欄位資料格式不符"
+          })
         return
         }
       }
       if(expectedType === "boolean"){
         if(!value ||  !(value === "true" || value ===  "false")){
           res.status(400).json({
-          status: false,
-          message: "欄位資料格式不符"
-        })
+            status: false,
+            message: "欄位資料格式不符"
+          })
         return
         }
       }
@@ -998,7 +998,7 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) =>{
         mainImageUrl: product.imageurl,
         title: product.title,
         author: product.author,
-        price: Number(product.price),
+        price: parseInt(product.price),
         stockQuantify: product.stock_quantity,
         isVisible: product.is_visible,
         categoryId: product.categories_id,
@@ -1023,7 +1023,90 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) =>{
   }
 })
 router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, next) =>{
-  try{}catch(error){
+  try{
+    const {productId} = req.params;
+    if(!productId || isNotValidInteger(Number(productId)) || Number.isNaN(Number(productId))){
+      res.status(400).json({
+        status: false,
+        message: "欄位資料格式不符"
+      })
+      return
+    }
+    const existProduct = await dataSource.getRepository("Products")
+      .createQueryBuilder("products")
+      .where("products.id =:productId", {productId: productId})
+      .getExists();
+    if(!existProduct){
+      res.status(404).json({
+        status: false,
+        message: "找不到此商品"
+      })
+      return
+    }
+    const productData = await dataSource.getRepository("Products")
+      .createQueryBuilder("products")
+      .innerJoin("products.AgeRanges", "ageranges")
+      .innerJoin("products.Categories", "categories")
+      .select([
+        "products.id AS id",
+        "products.title AS title",
+        "products.author AS author",
+        "products.publisher AS publisher",
+        "products.isbn AS isbn",
+        "products.price AS price",
+        "products.discount_price AS discount_price",
+        "products.stock_quantity AS stock_quantity",
+        "products.page_count AS page_count",
+        "products.publish_date AS publish_date",
+        "ageranges.name AS ageranges_name",
+        "categories.name AS category_name",
+        "products.introduction_html AS introduction_html",
+        "products.is_new_arrival AS is_new_arrival",
+        "products.is_bestseller AS is_bestseller",
+        "products.is_discount AS is_discount",
+        "products.is_visible AS is_visible",
+      ])
+      .where("products.id =:productId", {productId: productId})
+      .getRawOne();
+    const imageData = await dataSource.getRepository("ProductImages")
+      .createQueryBuilder("image")
+      .select([
+        "image_url",
+        "is_primary"
+      ])
+      .where("image.product_id =:productId", {productId: productId})
+      .getRawMany();
+    const imageResult = imageData.map(data =>{
+      return {
+        imageUrl: data.image_url,
+        isPrimary: data.is_primary
+      }
+    })
+    res.status(200).json({
+      status: true,
+      data: {
+        id: productData.id,
+        title: productData.title,
+        author: productData.author,
+        illustrator: productData.illustrator,
+        publisher: productData.publisher,
+        isbn: productData.isbn,
+        price: parseInt(productData.price),
+        discountPrice: parseInt(productData.discount_price),
+        stockQuantity: productData.stock_quantity,
+        pageCount: productData.page_count,
+        publishDate: formatDateToYYYYMMDD(productData.publish_date),
+        ageRangeName: productData.ageranges_name,
+        categoryName: productData.category_name,
+        introductionHtml: productData.introduction_html,
+        isNewArrival: productData.is_new_arrival,
+        isBestseller: productData.is_bestseller,
+        isDiscount: productData.is_discount,
+        isVisible: productData.is_visible,
+        imageUrls: imageResult
+      }
+    })
+  }catch(error){
     logger.error("取得商品詳細錯誤:", error);
     next(error);
   }
