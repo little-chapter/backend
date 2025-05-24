@@ -1,112 +1,113 @@
 const { EntitySchema } = require("typeorm");
 
 module.exports = new EntitySchema({
-    name: "PaymentTransactions",
-    tableName: "paymentTransactions",
+    name: "PendingOrders",
+    tableName: "pendingOrders",
     columns: {
         id: {
-            type: "integer",
+            type: "uuid",
             primary: true,
-            generated: "increment",
+            generated: "uuid",
             nullable: false,
         },
-        order_id: {
+        user_id: {
             type: "uuid",
             nullable: false,
         },
-        merchant_order_no: {
+        order_number: {
             type: "varchar",
             length: 30,
             nullable: false,
             unique: true
         },
-        transaction_number: {
+        status: {
             type: "varchar",
-            length: 100,
+            length: 20,
             nullable: false,
+            default: "pending",
         },
-        payment_type: {
-            type: "varchar",
-            length: 50,
-            nullable: false,
-        },
-        amount: {
+        total_amount: {
             type: "numeric",
             precision: 10,
             scale: 2,
             nullable: false,
         },
-        currency: {
+        shipping_fee: {
+            type: "numeric",
+            precision: 10,
+            scale: 2,
+            nullable: false,
+            default: 0,
+        },
+        discount_amount: {
+            type: "numeric",
+            precision: 10,
+            scale: 2,
+            nullable: false,
+            default: 0,
+        },
+        final_amount: {
+            type: "numeric",
+            precision: 10,
+            scale: 2,
+            nullable: false,
+        },
+        recipient_name: {
+            type: "varchar",
+            length: 100,
+            nullable: false,
+        },
+        recipient_email: {
+            type: "varchar",
+            length: 255,
+            nullable: false,
+        },
+        recipient_phone: {
+            type: "varchar",
+            length: 20,
+            nullable: false,
+        },
+        invoice_type: {
+            type: "varchar",
+            length: 20,
+            nullable: false,
+        },
+        carrier_number: {
             type: "varchar",
             length: 10,
-            nullable: false,
-            default: "TWD",
+            nullable: true,
         },
-        status: {
+        shipping_method: {
             type: "varchar",
             length: 50,
             nullable: false,
         },
-        payment_time: {
-            type: "timestamp",
-            nullable: false,
-        },
-        bank_code: {
-            type: "varchar",
-            length: 10,
+        shipping_address: {
+            type: "text",
             nullable: true,
         },
-        payer_account5code: {
-            type: "varchar",
-            length: 10,
-            nullable: true,
-        },
-        account_number: {
-            type: "varchar",
-            length: 50,
-            nullable: true,
-        },
-        barcode_1: {
-            type: "varchar",
-            length: 50,
-            nullable: true,
-        },
-        barcode_2: {
-            type: "varchar",
-            length: 50,
-            nullable: true,
-        },
-        barcode_3: {
-            type: "varchar",
-            length: 50,
-            nullable: true,
-        },
-        auth_code: {
+        store_code: {
             type: "varchar",
             length: 20,
             nullable: true,
         },
-        card_start6: {
+        store_name: {
             type: "varchar",
-            length: 6,
+            length: 100,
             nullable: true,
         },
-        card_last4: {
+        payment_method:{
             type: "varchar",
-            length: 4,
+            length: 50,
             nullable: true,
         },
-        return_code: {
-            type: "varchar",
-            length: 20,
-            nullable: true,
-        },
-        return_message: {
+        note:{
             type: "text",
             nullable: true,
         },
-        raw_response: {
-            type: "text",
+        discount_code:{
+            type: "varchar",
+            length: 50,
             nullable: true,
         },
         created_at: {
@@ -114,23 +115,20 @@ module.exports = new EntitySchema({
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
-        updated_at: {
+        expired_at: {
             type: "timestamptz",
-            default: () => "CURRENT_TIMESTAMP",
-            onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,
         },
     },
     relations: {
-        Orders: {
-            target: "Orders",
-            type: "one-to-one",
+        User: {
+            target: "User",
+            type: "many-to-one",
             joinColumn: {
-                name: "order_id",
+                name: "user_id",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "paymentTransactions_orders_id_fk"
-            },
-            onDelete:"RESTRICT"
+                foreignKeyConstraintName: "pending_orders_user_id_fk"
+            }
         },
     }
 })

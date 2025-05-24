@@ -71,6 +71,11 @@ module.exports = new EntitySchema({
             length: 20,
             nullable: false,
         },
+        carrier_number: {
+            type: "varchar",
+            length: 10,
+            nullable: true,
+        },
         shipping_status: {
             type: "varchar",
             length: 20,
@@ -83,7 +88,7 @@ module.exports = new EntitySchema({
         },
         shipping_address: {
             type: "text",
-            nullable: true,
+            nullable: false,
         },
         store_code: {
             type: "varchar",
@@ -114,24 +119,24 @@ module.exports = new EntitySchema({
             nullable: true,
         },
         shipped_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: true,
         },
         completed_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: true,
         },
         cancelled_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: true,
         },
         created_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
         updated_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,

@@ -111,7 +111,7 @@ router.get("/", async(req, res, next)=>{
                     "image.image_url AS image_url",
                     "ageRanges.name AS age_range_name",
                     "categories.name AS category_name",
-                    "products.description AS description",
+                    "products.introduction_html AS introduction_html",
                     "products.is_new_arrival AS is_new_arrival",
                 ])
                 .where("rs.name =:section_name", {section_name: sectionName})
@@ -125,7 +125,7 @@ router.get("/", async(req, res, next)=>{
                     imageUrl: product.image_url,
                     ageRangeName: product.age_range_name,
                     categoryName: product.category_name,
-                    description: product.description,
+                    introductionHtml: product.introduction_html,
                     isNewArrival: product.is_new_arrival
                 }
             });
@@ -147,7 +147,7 @@ router.get("/", async(req, res, next)=>{
                     "rp.product_id AS id",
                     "products.title AS title",
                     "image.image_url AS image_url",
-                    "products.description AS description"
+                    "products.introduction_html AS introduction_html"
                 ])
                 .where("rs.name =:section_name", {section_name: sectionName})
                 .getRawMany();
@@ -156,7 +156,7 @@ router.get("/", async(req, res, next)=>{
                     id: bundle.id,
                     title: bundle.title,
                     imageUrl: bundle.image_url,
-                    description: bundle.description
+                    introductionHtml: bundle.introduction_html
                 }
             });
             res.status(200).json({

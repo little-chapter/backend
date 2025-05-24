@@ -362,7 +362,6 @@ router.get("/:productId", async(req, res, next)=>{
             .select([
                 "products.id AS id",
                 "products.title AS title",
-                "products.description AS description",
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "products.stock_quantity AS stock_quantity",
@@ -392,12 +391,16 @@ router.get("/:productId", async(req, res, next)=>{
             .createQueryBuilder("images")
             .select([
                 "images.image_url AS image_url",
+                "images.is_primary AS is_primary"
             ])
             .where("images.product_id =:productId", {productId: existProduct.id})
             .orderBy("display_order")
             .getRawMany();
         const productImages = allImages.map(image =>{
-            return image.image_url
+            return {
+                imageUrl: image.image_url,
+                isPrimary: image.is_primary
+            }
         })
         existProduct.imageUrls = (productImages) ? productImages : null;
         res.status(200).json({
@@ -405,7 +408,6 @@ router.get("/:productId", async(req, res, next)=>{
             data: {
                 productId: existProduct.id,
                 title: existProduct.title,
-                description: existProduct.description,
                 price: existProduct.price,
                 discountPrice: existProduct.discount_price,
                 stockQuantity: existProduct.stock_quantity,
