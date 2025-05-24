@@ -884,5 +884,148 @@ router.put(
     }
   }
 );
-
+router.get("/products", verifyToken, verifyAdmin, async (req, res, next) =>{
+  try{
+    let filters = req.query;
+    const allowedFilters = {
+      page: "number",
+      limit: "number",
+      categoryId: "number",
+      ageRangeId: "number",
+      isVisible: "boolean"
+    };
+    for(const key of Object.keys(filters)){
+      if(!(key in allowedFilters)){
+        res.status(400).json({
+          status: false,
+          message: "不支援的搜尋條件"
+        })
+        return
+      }
+      
+      const expectedType = allowedFilters[key];
+      const value = filters[key];
+      if(expectedType === "number"){
+        if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+          res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符"
+        })
+        return
+        }
+      }
+      if(expectedType === "boolean"){
+        if(!value ||  !(value === "true" || value ===  "false")){
+          res.status(400).json({
+          status: false,
+          message: "欄位資料格式不符"
+        })
+        return
+        }
+      }
+    }
+    let productQuery = await dataSource.getRepository("Products")
+      .createQueryBuilder("products")
+      .innerJoin("products.Categories", "categories")
+      .innerJoin("products.AgeRanges", "ageRanges")
+      .leftJoin("ProductImages", "image", "image.product_id = products.id", "image.is_primary =:isPrimary", {isPrimary: true})
+      .select([
+        "products.id AS id",
+        "image.image_url AS imageurl",
+        "products.title AS title",
+        "products.author AS author",
+        "products.price AS price",
+        "products.stock_quantity AS stock_quantity",
+        "products.is_visible AS is_visible",
+        "categories.id AS categories_id",
+        "ageRanges.id AS age_ranges_id"
+      ])
+    if(filters.categoryId){
+      const categoryId = Number(filters.categoryId);
+      const existCategory = await dataSource.getRepository("Categories").findOneBy({id: categoryId});
+      if(!existCategory){
+        res.status(404).json({
+          status: false,
+          message: "找不到此主題分類"
+        })
+        return
+      }
+      productQuery = productQuery
+        .andWhere("categories.id =:categoryId", {categoryId: categoryId})
+    }
+    if(filters.ageRangeId){
+      const ageRangeId = Number(filters.ageRangeId);
+      const existAgeRange = await dataSource.getRepository("AgeRanges").findOneBy({id: ageRangeId});
+      if(!existAgeRange){
+        res.status(404).json({
+          status: false,
+          message: "找不到此年齡分類"
+        })
+        return
+      }
+      productQuery = productQuery
+        .andWhere("ageRanges.id =:ageRangesId", {ageRangesId: ageRangeId})
+    }
+    if(filters.isVisible){
+      const isVisible = filters.isVisible;
+      productQuery = productQuery
+        .andWhere("products.is_visible =:isVisible", {isVisible: isVisible})
+    }
+    productQuery = productQuery
+      .orderBy("products.id", "ASC")
+    const countQuery = productQuery.clone();
+    const count = await countQuery.getCount();
+    let page = 1;
+    let limit = 5;
+    if(filters.page && Number(filters.page) > 1){
+      page = Number(filters.page);
+    }
+    if(filters.limit && Number(filters.limit) >= 1){
+      limit = Number(filters.limit);
+    }
+    let totalPages = Math.max(1, Math.ceil(count / limit));
+    if(page > totalPages){
+      page = totalPages
+    }
+    const skip = (page - 1) * limit;
+    const productsData = await productQuery
+      .offset(skip)
+      .limit(limit)
+      .getRawMany();
+    const productResult = productsData.map(product =>{
+      return {
+        id: product.id,
+        mainImageUrl: product.imageurl,
+        title: product.title,
+        author: product.author,
+        price: Number(product.price),
+        stockQuantify: product.stock_quantity,
+        isVisible: product.is_visible,
+        categoryId: product.categories_id,
+        ageRangeId: product.age_ranges_id
+      }
+    })
+    res.status(200).json({
+      status: true,
+      data: {
+        pagination: {
+          page: page,
+          limit: limit,
+          total: count,
+          totalPages: totalPages
+        },
+        products: productResult
+      }
+    })
+  }catch(error){
+    logger.error("取得商品列表錯誤:", error);
+    next(error);
+  }
+})
+router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, next) =>{
+  try{}catch(error){
+    logger.error("取得商品詳細錯誤:", error);
+    next(error);
+  }
+})
 module.exports = router;
