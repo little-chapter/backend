@@ -8,9 +8,24 @@ const {
 function generateEzpay(orderData, orderItems){
     const unit = "本";
     const taxRate = 5;
+    const delivery = {
+        title: "運費",
+        quantity: 1,
+        price: orderData.shipping_amount,
+        subtotal: orderData.shipping_amount,
+        unit: "筆",
+    }
+    const discount = {
+        title: "折扣碼折扣",
+        price: orderData.discount_price ? `-${orderData.discount_price}` : 0,
+        quantity: orderData.discount_price ? 1 : 0,
+        subtotal: orderData.discount_price ? `-${orderData.discount_price * 1}` : 0,
+        unit: "張"
+    }
+    orderItems.push(delivery, discount);
     const itemName = orderItems.map(item => item.title).join("|");
     const itemCount = orderItems.map(item => item.quantity).join("|");
-    const itemUnit = orderItems.map(() => unit).join("|");
+    const itemUnit = orderItems.map(item => item.unit ? `${item.unit}` : unit).join("|");
     const itemPrice = orderItems.map(item => parseInt(item.price)).join("|");
     const itemAmt = orderItems.map(item => parseInt(item.subtotal)).join("|");
     const payload =  {
@@ -30,11 +45,11 @@ function generateEzpay(orderData, orderItems){
         amt: Math.round(orderData.final_amount * (1 - taxRate / 100)),
         taxAmt: orderData.final_amount - Math.round(orderData.final_amount * (1 - taxRate / 100)),
         totalAmt: parseInt(orderData.final_amount),
-        itemName: orderData.discount_amount ? itemName + "|折扣碼折抵" : itemName,
-        itemCount: orderData.discount_amount ? itemCount + "|1" : itemCount,
-        itemUnit: orderData.discount_amount ? itemUnit + "|張" : itemUnit,
-        itemPrice: orderData.discount_amount ? itemPrice + `|-${parseInt(orderData.discount_amount)}` : itemPrice,
-        itemAmt: orderData.discount_amount ? itemAmt + `|-${parseInt(orderData.discount_amount)}` : itemAmt,
+        itemName: itemName,
+        itemCount: itemCount,
+        itemUnit: itemUnit,
+        itemPrice: itemPrice,
+        itemAmt: itemAmt,
         comment: '親子繪本',
     }
     console.log("payload:", payload)
