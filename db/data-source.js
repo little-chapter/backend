@@ -17,6 +17,7 @@ const DiscountCode = require("./entities/DiscountCodeSchema");
 const DiscountCodeUsage = require("./entities/DiscountCodeUsageSchema");
 const PendingOrder = require("./entities/PendingOrderSchema");
 const PendingOrderItem = require("./entities/PendingOrderItemSchema");
+const Notifications = require("./entities/NotificationsSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -44,6 +45,7 @@ const dataSource = new DataSource({
     DiscountCodeUsage,
     PendingOrder,
     PendingOrderItem,
+    Notifications
   ],
   ssl: config.get("db.ssl"),
 });
