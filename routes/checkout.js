@@ -5,60 +5,10 @@ const { verifyToken } = require("../middlewares/auth");
 const logger = require('../utils/logger')('Checkout');
 const { isNotValidString, isNotValidInteger, isValidEmail } = require("../utils/validUtils");
 const { isUUID } = require("validator");
-const crypto = require('crypto');
 const { addOneDayToUtc } = require("../utils/datetimeUtils");
+const { generateTradeInfo } = require("../utils/generateTradeinfo");
 
-const { 
-    NEWEPAY_MERCHANTID,
-    NEWEPAY_HASHKEY, 
-    NEWEPAY_HASHIV, 
-    NEWEPAY_VERSION, 
-    NEWEPAY_RETURN_URL, 
-    NEWEPAY_NOTIFY_URL,
-    NEWEPAY_PAYGATEWAY,
-    FRONTEND_URL
-} = process.env;
-
-function generateTradeInfo(finalAmount, email, orderNumber) {
-    const data = {
-        MerchantID: NEWEPAY_MERCHANTID,
-        RespondType: 'JSON',
-        TimeStamp: Date.now().toString(),
-        Version: NEWEPAY_VERSION,
-        MerchantOrderNo: orderNumber,
-        Amt: parseInt(finalAmount),
-        ItemDesc: "Little Chapter親子繪本商品",
-        TradeLimit: 900,
-        Email: email,
-        ReturnURL: NEWEPAY_RETURN_URL,
-        NotifyURL: NEWEPAY_NOTIFY_URL,
-    };
-    console.log('藍新TradeInfo',data)
-    const tradeInfoStr = `MerchantID=${data.MerchantID}&RespondType=${data.RespondType}&TimeStamp=${data.TimeStamp}&Version=${data.Version}&MerchantOrderNo=${data.MerchantOrderNo}&Amt=${data.Amt}&ItemDesc=${encodeURIComponent(data.ItemDesc)}&Email=${encodeURIComponent(data.Email)}&ReturnURL=${encodeURIComponent(data.ReturnUrl)}&NotifyURL=${encodeURIComponent(data.NotifyUrl)}`;
-    console.log('原始訊息:',tradeInfoStr)
-    const encrypted = encryptAES(tradeInfoStr);
-    console.log('AES加密訊息:',encrypted)
-    const tradeSha = sha256(`HashKey=${NEWEPAY_HASHKEY}&${encrypted}&HashIV=${NEWEPAY_HASHIV}`).toUpperCase();
-    console.log('SHA加密訊息:',tradeSha)
-    return {
-        merchantID: NEWEPAY_MERCHANTID,
-        tradeInfo: encrypted,
-        tradeSha: tradeSha,
-        version: NEWEPAY_VERSION,
-        payGateWay: NEWEPAY_PAYGATEWAY
-    }
-}
-
-function encryptAES(data) {
-    const cipher = crypto.createCipheriv('aes-256-cbc', NEWEPAY_HASHKEY, NEWEPAY_HASHIV);
-    let encrypted = cipher.update(data, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
-}
-
-function sha256(str) {
-    return crypto.createHash('sha256').update(str).digest('hex');
-}
+const { FRONTEND_URL } = process.env;
 
 router.post("/", verifyToken, async(req, res, next)=>{
     try{
@@ -335,8 +285,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 return
             }
         })
-        const existPending = await dataSource.getRepository("PendingOrders").findOneBy({order_number: orderNumber})
-        console.log(existPending)
         const order = generateTradeInfo(finalAmount, email, orderNumber);
         res.status(200).json({
             status: true,
