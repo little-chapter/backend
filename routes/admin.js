@@ -658,7 +658,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
       return {
         orderNumber: order.order_number,
         userName: order.username,
-        finalAmount: order.final_amount,
+        finalAmount: parseInt(order.final_amount),
         orderStatus: order.order_status,
         paymentStatus: order.payment_status,
         shippingStatus: order.shipping_status,
@@ -722,7 +722,7 @@ router.get(
           "orders.shipping_status AS shipping_status",
           "orders.payment_status AS payment_status",
           "orders.payment_method AS payment_method",
-          "pt.transaction_id AS transaction_id",
+          "pt.transaction_number AS transaction_number",
           "orders.total_amount AS total_amount",
           "orders.shipping_fee AS shipping_fee",
           "orders.discount_amount AS discount_amount",
@@ -755,8 +755,8 @@ router.get(
         return {
           productTitle: item.title,
           quantity: item.quantity,
-          price: item.price,
-          subtotal: item.subtotal,
+          price: parseInt(item.price),
+          subtotal: parseInt(item.subtotal),
         };
       });
       res.status(200).json({
@@ -767,11 +767,11 @@ router.get(
           shippingStatus: orderData.shipping_status,
           paymentStatus: orderData.payment_status,
           paymentMethod: orderData.payment_method,
-          transactionId: orderData.transaction_id,
-          totalAmount: orderData.total_amount,
-          shippingFee: orderData.shipping_fee,
-          discountAmount: orderData.discount_amount,
-          finalAmount: orderData.final_amount,
+          transactionNumber: orderData.transaction_number,
+          totalAmount: parseInt(orderData.total_amount),
+          shippingFee: parseInt(orderData.shipping_fee),
+          discountAmount: parseInt(orderData.discount_amount),
+          finalAmount: parseInt(orderData.final_amount),
           note: orderData.note,
           statusNote: orderData.status_note,
           shippingInfo: {

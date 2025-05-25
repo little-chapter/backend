@@ -3,6 +3,7 @@ const cors = require("cors");
 const path = require("path");
 const pinoHttp = require("pino-http");
 const logger = require("./utils/logger")("App");
+const cleanExpiredPendingOrders = require("./utils/tasks")
 const usersRouter = require("./routes/users");
 const productsRouter = require("./routes/products");
 const ordersRouter = require("./routes/orders");
@@ -29,6 +30,7 @@ app.use(
 );
 
 app.use(express.static(path.join(__dirname, "public")));
+cleanExpiredPendingOrders();
 
 app.get("/healthcheck", (req, res) => {
   res.status(200);

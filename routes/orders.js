@@ -77,7 +77,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
                 totalQuantity: order.total_quantity,
-                finalAmount: order.final_amount,
+                finalAmount: parseInt(order.final_amount),
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
                 shippingStatus: order.shipping_status
@@ -123,7 +123,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         const items = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .innerJoin("orderItems.Products", "products")
-            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id", "image.is_primary =:isPrimary", {isPrimary: true})
+            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id","image.is_primary =:isPrimary", {isPrimary: true})
             .select([
                 "orderItems.product_id AS id",
                 "orderItems.product_title AS title",
@@ -140,17 +140,17 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
                 productTitle: item.title,
                 author: item.author,
                 quantity: item.quantity,
-                itemAmount: item.subtotal,
+                itemAmount: parseInt(item.subtotal),
                 imageUrl: item.image_url
             }
         })
         res.status(200).json({
             status: true,
             data: {
-                totalAmount: existOrder.total_amount,
-                discountAmount: existOrder.discount_amount,
-                shippingFee: existOrder.shipping_fee,
-                finalAmount: existOrder.final_amount,
+                totalAmount: parseInt(existOrder.total_amount),
+                discountAmount: parseInt(existOrder.discount_amount),
+                shippingFee: parseInt(existOrder.shipping_fee),
+                finalAmount: parseInt(existOrder.final_amount),
                 items: itemsResult
             }
         })

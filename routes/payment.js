@@ -2,17 +2,13 @@ const express = require("express");
 const router = express.Router();
 const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Payment');
-const {isNotValidString, isNotValidInteger, isValidEmail} = require("../utils/validUtils");
+const { isNotValidString, isNotValidInteger, isValidEmail } = require("../utils/validUtils");
 const crypto = require('crypto');
 
 const { 
-    HASHKEY, 
-    HASHIV, 
-    MerchantID, 
-    Version, 
-    PayGateWay, 
-    ReturnUrl, 
-    NotifyUrl
+    NEWEPAY_HASHKEY, 
+    NEWEPAY_HASHIV,
+    FRONTEND_URL
 } = process.env;
 
 //SHA256加密
@@ -22,7 +18,7 @@ function sha256(str) {
 
 //AES解密
 function decryptAES(encryptedData) {
-    const decipher = crypto.createDecipheriv('aes-256-cbc', HASHKEY, HASHIV);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', NEWEPAY_HASHKEY, NEWEPAY_HASHIV);
     decipher.setAutoPadding(false);
     let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
@@ -33,51 +29,14 @@ function decryptAES(encryptedData) {
 router.post("/return", async(req, res, next) =>{
     try{
         const raw = req.body.TradeInfo;
-        if(!raw){
-            logger.warn("交易資料不完全")
-            res.status(400).json({
-                status: false,
-                message: "交易資料不完全",
-                // redirectUrl:
-            })
-            return
-        }
         const returnData = decryptAES(raw);
         const result = returnData.Result;
         console.log('解密Return:', returnData);
         if(returnData.Status !== "SUCCESS"){
-            res.status(400).json({
-                status: false,
-                message: "交易失敗",
-                data: {
-                    transaction: {
-                        status: returnData.Status,
-                        message: returnData.Message,
-                        payTime: result.PayTime,
-                        orderNumber: result.MerchantOrderNo,
-                        paymentType: result.PaymentType,
-                        amt: result.Amt
-                    }
-                },
-                // redirectUrl:
-            })
+            res.redirect(`${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/fail?orderNum=${result.MerchantOrderNo}?serialNum=${result.TradeNo}?price=${result.Amt}?type=${result.PaymentType}`);
             return
         }
-        res.status(200).json({
-            status: true,
-            message: "交易成功",
-            data: {
-                transaction: {
-                    status: returnData.Status.toLowerCase(),
-                    payTime: result.PayTime,
-                    orderNumber: result.MerchantOrderNo,
-                    paymentType: result.PaymentType,
-                    amt: result.Amt,
-                    tradeNo: result.TradeNo
-                }
-            },
-            // redirectUrl: 
-        })
+        res.redirect(`${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/success?orderNum=${result.MerchantOrderNo}?serialNum=${result.TradeNo}?price=${result.Amt}?type=${result.PaymentType}`);
     }catch(error){
         logger.error('金流前台回傳錯誤:', error);
         next(error);
@@ -93,7 +52,7 @@ router.post("/notify", async(req, res, next) =>{
             return
         }
         // 再次 SHA 加密TradeInfo，確保兩個Sha比對一致（避免不正確的請求觸發交易成功）
-        const resSHA = sha256(`HashKey=${HASHKEY}&${raw}&HashIV=${HASHIV}`).toUpperCase();
+        const resSHA = sha256(`HashKey=${NEWEPAY_HASHKEY}&${raw}&HashIV=${NEWEPAY_HASHIV}`).toUpperCase();
         console.log('resSHA:',resSHA)
         if(resSHA !== req.body.TradeSha){
             logger.warn("回傳TradeSha錯誤");
@@ -110,7 +69,13 @@ router.post("/notify", async(req, res, next) =>{
         }
         const result = returnData.Result;
         //取得暫存訂單
-        const existPendingOrder = await dataSource.getRepository("PendingOrders").findOneBy({order_number: result.MerchantOrderNo});
+        const now = new Date().toISOString();
+        const existPendingOrder = await dataSource.getRepository("PendingOrders")
+            .createQueryBuilder("pendingOrders")
+            .where("pendingOrders.order_number =:orderNumber", {orderNumber: result.MerchantOrderNo})
+            .andWhere("pendingOrders.status =:status", {status: "pending"})
+            .andWhere("pendingOrders.expired_at >=:expiredAt", {expiredAt: now})
+            .getRawOne();
         console.log("暫存訂單:", existPendingOrder)
         if(!existPendingOrder){
             logger.warn("此訂單編號不存在暫存訂單");
@@ -120,12 +85,6 @@ router.post("/notify", async(req, res, next) =>{
         if(Number(result.Amt) !== Number(existPendingOrder.final_amount)){
             logger.warn("交易金額與暫存總金額不符");
             console.log("交易金額與暫存總金額不符");
-            return
-        }
-        const now = new Date().toISOString();
-        if(existPendingOrder.status !== "pending" || existPendingOrder.expired_at < now){
-            logger.warn("此訂單已過期");
-            console.log("此訂單已過期");
             return
         }
         //取得暫存訂單項目
@@ -146,20 +105,21 @@ router.post("/notify", async(req, res, next) =>{
                     user_id: existPendingOrder.user_id,
                     order_number: existPendingOrder.order_number,
                     order_status: "pending",
-                    total_amount: Number(existPendingOrder.total_amount),
-                    shipping_fee: Number(existPendingOrder.shipping_fee),
-                    discount_amount: Number(existPendingOrder.discount_amount),
-                    final_amount: Number(existPendingOrder.final_amount),
+                    total_amount: parseInt(existPendingOrder.total_amount),
+                    shipping_fee: parseInt(existPendingOrder.shipping_fee),
+                    discount_amount: parseInt(existPendingOrder.discount_amount),
+                    final_amount: parseInt(existPendingOrder.final_amount),
                     recipient_name: existPendingOrder.recipient_name,
                     recipient_email: existPendingOrder.recipient_email,
                     recipient_phone: existPendingOrder.recipient_phone,
                     invoice_type: existPendingOrder.invoice_type,
+                    carrier_number: existPendingOrder.carrier_number,
                     shipping_status: "notReceived",
                     shipping_method: existPendingOrder.shipping_method,
                     shipping_address: existPendingOrder.shipping_address,
                     store_code: existPendingOrder.store_code,
                     store_name: existPendingOrder.store_name,
-                    payment_method: existPendingOrder.payment_method,
+                    payment_method: result.PaymentType,
                     payment_status: "paid",
                     note: existPendingOrder.note,
                 })
@@ -177,9 +137,9 @@ router.post("/notify", async(req, res, next) =>{
                     order_id: orderId,
                     product_id: item.product_id,
                     product_title: item.product_title,
-                    quantity: Number(item.quantity),
-                    price: Number(item.price),
-                    subtotal: Number(item.subtotal),
+                    quantity: parseInt(item.quantity),
+                    price: parseInt(item.price),
+                    subtotal: parseInt(item.subtotal),
                     is_reviewed: false,
                 }
             })
@@ -206,10 +166,10 @@ router.post("/notify", async(req, res, next) =>{
                     merchant_order_no: result.MerchantOrderNo,
                     transaction_number: result.TradeNo,
                     payment_type: result.PaymentType,
-                    amount: Number(result.Amt),
+                    amount: parseInt(result.Amt),
                     currency:"TWD",
                     status: returnData.Status,
-                    payment_time: result.PayTime,
+                    payment_time: new Date(result.PayTime).toTSOString(),
                     bank_code: result.PayBankCode ? result.PayBankCode : null,
                     payer_account5code: result.PayerAccount5Code ? result.PayerAccount5Code : null,
                     account_number: result.CodeNo ? result.CodeNo : null,
@@ -217,6 +177,7 @@ router.post("/notify", async(req, res, next) =>{
                     barcode_2: result.Barcode_2 ? result.Barcode_2 : null,
                     barcode_3: result.Barcode_3 ? result.Barcode_3 : null,
                     auth_code: result.Auth ? result.Auth : null,
+                    card_start6: result.Card6No ? result.Card6No : null,
                     card_last4: result.Card4No ? result.Card4No : null,
                     return_code: result.RespondCode ? result.RespondCode : null,
                     return_message: returnData.Message,
@@ -240,7 +201,7 @@ router.post("/notify", async(req, res, next) =>{
                         code_id: discountCode.id,
                         order_id: orderId,
                         user_id: existPendingOrder.user_id,
-                        discount_amount: Number(existPendingOrder.discount_amount),
+                        discount_amount: parseInt(existPendingOrder.discount_amount),
                     })
                     .execute();
                 if(newUsage.identifiers.length === 0){
@@ -251,7 +212,14 @@ router.post("/notify", async(req, res, next) =>{
             }
             //折扣碼使用次數+1
             //變更暫存訂單狀態為paid
-            const updatedUsage = await transactionalEntityManager.update("PendingOrders", {order_number: result.MerchantOrderNo}, {status: "paid"});
+            const updatedUsage = await transactionalEntityManager
+                .createQueryBuilder("PendingOrders")
+                .update()
+                .set({
+                    status: "paid"
+                })
+                .where("PendingOrders.order_number =:orderNumber", {orderNumber: result.MerchantOrderNo})
+                .execute();
             if(updatedUsage.affected === 0){
                 logger.warn("更新折扣碼使用紀錄失敗")
                 console.log("更新折扣碼使用紀錄失敗");
@@ -298,7 +266,7 @@ router.post("/notify", async(req, res, next) =>{
                     "orders.shipping_fee AS shipping_fee",
                     "orders.final_amount AS final_amount",
                 ])
-                .where("order.order_number =:orderNumber", {orderNumber: result.MerchantOrderNo})
+                .where("orders.order_number =:orderNumber", {orderNumber: result.MerchantOrderNo})
                 .getRawOne();
             const orderStatusList = {
                 created: "已建立",
@@ -328,17 +296,17 @@ router.post("/notify", async(req, res, next) =>{
             };
             const invoiceTypeList = {
                 "e-invoice": "電子發票",
-                carrier: "電子載具"
+                paper: "紙本發票"
             };
             const officalOrder = {
                 orderNumber: orderData.order_number,
                 orderStaus: orderStatusList[orderData.order_status],
                 paymentStaus: paymentStatusList[orderData.payment_status],
                 shippingStaus: shippingStatusList[orderData.shipping_status],
-                createdAt: new Date(orderData.created_at).toString(),
-                userName: orderData.username,
-                payTime: orderData.payment_time,
-                amount: Number(orderData.amount),
+                createdAt: new Date(orderData.created_at).toString(), //轉台灣時間
+                userName: orderData.username ? orderData.username : orderData.email,
+                payTime: orderData.payment_time, //轉台灣時間
+                amount: parseInt(orderData.amount),
                 paymentMethod: paymentMethodList[orderData.payment_method],
                 invoiceType: invoiceTypeList[orderData.invoice_type],
                 shippingMethod: shippingMethodList[orderData.shipping_method],
@@ -346,14 +314,14 @@ router.post("/notify", async(req, res, next) =>{
                 recipientEmail: orderData.recipient_email,
                 recipientPhone: orderData.recipient_phone,
                 shippingAddress: orderData.shipping_address,
-                note: orderData.note,
-                totalAmount: Number(orderData.total_amount),
-                discountAmount: Number(orderData.discount_amount),
-                shippingFee: Number(orderData.shipping_fee),
-                finalAmount: Number(orderData.final_amount)
+                note: orderData.note ? orderData.note : "未填寫",
+                totalAmount: parseInt(orderData.total_amount),
+                discountAmount: parseInt(orderData.discount_amount),
+                shippingFee: parseInt(orderData.shipping_fee),
+                finalAmount: parseInt(orderData.final_amount)
             };
             //正式訂單項目
-            const officalOrderItems = await dataSource.getRepository("OrderItems").find({order_id: orderId})
+            const officalOrderItems = await dataSource.getRepository("OrderItems").find({order_id: orderId});
             //寄信通知用戶
             let officalItemsStr = "";
             officalOrderItems.forEach(item =>{
