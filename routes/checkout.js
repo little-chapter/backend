@@ -3,65 +3,17 @@ const router = express.Router();
 const { dataSource } = require("../db/data-source");
 const { verifyToken } = require("../middlewares/auth");
 const logger = require('../utils/logger')('Checkout');
-const {isNotValidString, isNotValidInteger, isValidEmail} = require("../utils/validUtils");
-const {isUUID} = require("validator");
-const crypto = require('crypto');
+const { isNotValidString, isNotValidInteger, isValidEmail } = require("../utils/validUtils");
+const { isUUID } = require("validator");
+const { addOneDayToUtc } = require("../utils/datetimeUtils");
+const { generateTradeInfo } = require("../utils/generateTradeinfo");
 
-const { 
-    HASHKEY, 
-    HASHIV, 
-    MerchantID, 
-    Version, 
-    PayGateWay, 
-    ReturnUrl, 
-    NotifyUrl
-} = process.env;
-
-function generateTradeInfo(finalAmount, email, orderNumber) {
-    const data = {
-        MerchantID: MerchantID,
-        RespondType: 'JSON',
-        TimeStamp: Date.now().toString(),
-        Version: Version,
-        MerchantOrderNo: orderNumber,
-        Amt: parseInt(finalAmount),
-        ItemDesc: "Little Chapter親子繪本商品",
-        TradeLimit: 900,
-        Email: email,
-        ReturnURL: ReturnUrl,
-        NotifyURL: NotifyUrl,
-    };
-    console.log('藍新TradeInfo',data)
-    const tradeInfoStr = `MerchantID=${MerchantID}&RespondType=${data.RespondType}&TimeStamp=${data.TimeStamp}&Version=${data.Version}&MerchantOrderNo=${data.MerchantOrderNo}&Amt=${data.Amt}&ItemDesc=${encodeURIComponent(data.ItemDesc)}&Email=${encodeURIComponent(data.Email)}&ReturnURL=${encodeURIComponent(ReturnUrl)}&NotifyURL=${encodeURIComponent(NotifyUrl)}`;
-    console.log('原始訊息:',tradeInfoStr)
-    const encrypted = encryptAES(tradeInfoStr);
-    console.log('AES加密訊息:',encrypted)
-    const tradeSha = sha256(`HashKey=${HASHKEY}&${encrypted}&HashIV=${HASHIV}`).toUpperCase();
-    console.log('SHA加密訊息:',tradeSha)
-    return {
-        MerchantID: MerchantID,
-        TradeInfo: encrypted,
-        TradeSha: tradeSha,
-        Version: Version,
-        PayGateWay: PayGateWay
-    }
-}
-
-function encryptAES(data) {
-    const cipher = crypto.createCipheriv('aes-256-cbc', HASHKEY, HASHIV);
-    let encrypted = cipher.update(data, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
-}
-
-function sha256(str) {
-    return crypto.createHash('sha256').update(str).digest('hex');
-}
+const { FRONTEND_URL } = process.env;
 
 router.post("/", verifyToken, async(req, res, next)=>{
     try{
         let {totalAmount, discountAmount, shippingFee, finalAmount, discountCode, items, paymentMethod, shippingMethod,
-            recipientName, recipientEmail, recipientPhone, shippingAddress, invoiceType, note
+            recipientName, recipientEmail, recipientPhone, shippingAddress, invoiceType, carrierNum, note
         } = req.body;
         const {id, email} = req.user;
         if(!totalAmount || !finalAmount || !items || !paymentMethod || !shippingMethod || !recipientName
@@ -97,6 +49,17 @@ router.post("/", verifyToken, async(req, res, next)=>{
         }else{
             shippingFee = 0;
         };
+        if(carrierNum){
+            carrierNum = String(carrierNum);
+            const carrierNumRegex = /^\/[0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+\-\.]{7}$/;
+            if(!carrierNumRegex.test(carrierNum)){
+                res.status(400).json({
+                    "status": false,
+                    "message": "欄位資料格式不符"
+                })
+                return
+            }
+        }
         if(note){
             note = String(note);
             if(typeof note !== "string"){
@@ -114,7 +77,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         const phoneRegex = /^09\d{8}$/;
         const allowedPaymentMethod = ["WEBATM", "CREDIT"];
         const allowedShippingMethod = ["homeDelivery"];
-        const allowedInvoiceType = ["e-invoice", "carrier"];
+        const allowedInvoiceType = ["e-invoice", "paper"];
         if(isNotValidInteger(totalAmount) || isNotValidInteger(finalAmount) || Number.isNaN(totalAmount) || Number.isNaN(finalAmount) || typeof items !== "object"
             || isNotValidString(paymentMethod) || !allowedPaymentMethod.includes(paymentMethod.toUpperCase()) || isNotValidString(shippingMethod) || !allowedShippingMethod.includes(shippingMethod)
             || isNotValidString(recipientName) || isNotValidString(recipientEmail) || !isValidEmail(recipientEmail) || isNotValidString(recipientPhone) || !phoneRegex.test(recipientPhone)
@@ -141,7 +104,9 @@ router.post("/", verifyToken, async(req, res, next)=>{
             })
             return
         }
-        const existUser = await dataSource.getRepository("User").findOneBy({id: id});
+        const existUser = await dataSource.getRepository("User")
+            .createQueryBuilder("user")
+            .where("user.id =:userId", {userId: id});
         if(!existUser){
             logger.warn("此用戶不存在");
             res.status(404).json({
@@ -249,6 +214,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
             })
             return
         }
+        const nowUTCStr = new Date().toISOString();
         const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0"); //隨機三碼
         const orderNumber = `ORD${Math.floor(Date.now()/1000)}${randomThreeDigits}`; //建立訂單編號
         await dataSource.transaction(async (transactionalEntityManager) => {
@@ -269,12 +235,13 @@ router.post("/", verifyToken, async(req, res, next)=>{
                     recipient_email: recipientEmail,
                     recipient_phone: recipientPhone,
                     invoice_type: invoiceType,
+                    carrier_number: carrierNum, 
                     shipping_method: shippingMethod,
                     shipping_address: shippingAddress,
                     payment_method: paymentMethod,
                     note: note,
                     discount_code: discountCode,
-                    expired_at: new Date(new Date().getTime() + 86400000).toISOString(),
+                    expired_at: addOneDayToUtc(nowUTCStr),
                 })
                 .execute();
             if(pendingOrder.identifiers.length === 0){
@@ -300,7 +267,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                     quantity: item.quantity,
                     price: item.price,
                     subtotal: item.price * item.quantity,
-                    expired_at: new Date(Date.now() + 86400000).toISOString()
+                    expired_at: addOneDayToUtc(nowUTCStr)
                 }
             })
             const orderItemResult = await transactionalEntityManager
@@ -318,8 +285,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 return
             }
         })
-        const existPending = await dataSource.getRepository("PendingOrders").findOneBy({order_number: orderNumber})
-        console.log(existPending)
         const order = generateTradeInfo(finalAmount, email, orderNumber);
         res.status(200).json({
             status: true,

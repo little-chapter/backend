@@ -11,22 +11,23 @@ function formatDateToYYYYMMDD(dateString){
     const day = String(date.getDate()).padStart(2, "0"); // 補零
     return `${year}-${month}-${day}`;
 }
-const allowedFilters = {
-	page: "number",
-	limit: "number",
-	categoryId: "number",
-	ageRangeId: "number",
-	priceMin: "number",
-	priceMax: "number",
-    sortBy: "string",
-    sortOrder: "string",
-    author: "string",
-    publisher: "string",
-};
+
 //取得篩選商品列表
 router.get("/", async(req, res, next)=>{
     try{
         const filters = req.query;
+        const allowedFilters = {
+            page: "number",
+            limit: "number",
+            categoryId: "number",
+            ageRangeId: "number",
+            priceMin: "number",
+            priceMax: "number",
+            sortBy: "string",
+            sortOrder: "string",
+            author: "string",
+            publisher: "string",
+        };
         // 確認網址參數與格式
         for (const key of Object.keys(filters)) {
             if (!(key in allowedFilters)) {
@@ -61,7 +62,7 @@ router.get("/", async(req, res, next)=>{
             .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
             .innerJoin("products.Categories", "categories")
-            .leftJoin("ProductImages", "image", "image.product_id = products.id", "image.is_primary =:isPrimary", {isPrimary: true})
+            .leftJoin("ProductImages", "image", "image.product_id = products.id")
             .select([
                 "products.id AS id",
                 "products.title AS title",
@@ -77,6 +78,7 @@ router.get("/", async(req, res, next)=>{
                 "products.is_discount AS is_discount",
             ])
             .where("products.is_visible =:isVisible", {isVisible: true})
+            .andWhere("image.is_primary =:isPrimary", {isPrimary: true})
         if(filters.categoryId){
             const categoryId = Number(filters.categoryId);
             const existCategoryId = await dataSource.getRepository("Categories").findOneBy({id: categoryId})
@@ -196,8 +198,8 @@ router.get("/", async(req, res, next)=>{
                 categoryName: product.categories_name,
                 author: product.author,
                 publisher: product.publisher,
-                price: product.price,
-                discountPrice: product.discount_price,
+                price: parseInt(product.price),
+                discountPrice: parseInt(product.discount_price),
                 imageUrl: product.image_url,
                 isNewArrival: product.is_new_arrival,
                 isBestseller: product.is_bestseller,
@@ -357,6 +359,17 @@ router.get("/:productId", async(req, res, next)=>{
         }
         const existProduct = await dataSource.getRepository("Products")
             .createQueryBuilder("products")
+            .where("products.id =:productId", {productId: productId})
+            .getExists();
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const productData = await dataSource.getRepository("Products")
+            .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
             .innerJoin("products.Categories", "categories")
             .select([
@@ -379,13 +392,6 @@ router.get("/:productId", async(req, res, next)=>{
             ])
             .where("products.id =:productId", {productId: productId})
             .getRawOne();
-        if(!existProduct){
-            res.status(404).json({
-                status: false,
-                message: "找不到此商品"
-            })
-            return
-        }
         // 取得商品圖片
         const allImages = await dataSource.getRepository("ProductImages")
             .createQueryBuilder("images")
@@ -393,7 +399,7 @@ router.get("/:productId", async(req, res, next)=>{
                 "images.image_url AS image_url",
                 "images.is_primary AS is_primary"
             ])
-            .where("images.product_id =:productId", {productId: existProduct.id})
+            .where("images.product_id =:productId", {productId: productData.id})
             .orderBy("display_order")
             .getRawMany();
         const productImages = allImages.map(image =>{
@@ -402,31 +408,30 @@ router.get("/:productId", async(req, res, next)=>{
                 isPrimary: image.is_primary
             }
         })
-        existProduct.imageUrls = (productImages) ? productImages : null;
         res.status(200).json({
             status: true,
             data: {
-                productId: existProduct.id,
-                title: existProduct.title,
-                price: existProduct.price,
-                discountPrice: existProduct.discount_price,
-                stockQuantity: existProduct.stock_quantity,
+                productId: productData.id,
+                title: productData.title,
+                price: parseInt(productData.price),
+                discountPrice: parseInt(productData.discount_price),
+                stockQuantity: productData.stock_quantity,
                 categoryInfo: {
-                    id: existProduct.categories_id,
-                    name: existProduct.categories_name
+                    id: productData.categories_id,
+                    name: productData.categories_name
                 },
                 ageRange: {
-                    id: existProduct.age_range_id,
-                    name: existProduct.age_range_name
+                    id: productData.age_range_id,
+                    name: productData.age_range_name
                 },
-                imageUrls: existProduct.imageUrls,
-                author: existProduct.author,
-                illustrator: existProduct.illustrator,
-                publisher: existProduct.publisher,
-                publishDate: formatDateToYYYYMMDD(existProduct.publish_date),
-                isbn: existProduct.isbn,
-                pageCount: existProduct.page_count,
-                introductionHtml: existProduct.introduction_html
+                imageUrls: productImages,
+                author: productData.author,
+                illustrator: productData.illustrator,
+                publisher: productData.publisher,
+                publishDate: formatDateToYYYYMMDD(productData.publish_date),
+                isbn: productData.isbn,
+                pageCount: productData.page_count,
+                introductionHtml: productData.introduction_html
             }
         })
     }catch(error){
