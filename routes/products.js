@@ -174,8 +174,8 @@ router.get("/", async(req, res, next)=>{
         const count = await countQuery.getCount();
         // 分頁
         let page = 1;
-        let limit = 20;
-        if(filters.page && Number(filters.page) >1){
+        let limit = 12;
+        if(filters.page && Number(filters.page) > 1){
             page = Number(filters.page);
         }
         if(filters.limit && Number(filters.limit) >= 1){
