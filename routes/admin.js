@@ -19,6 +19,53 @@ function formatDateToYYYYMMDD(dateString) {
   return `${year}-${month}-${day}`;
 }
 
+// 管理者取得個人資料
+router.get("/profile", verifyToken, verifyAdmin, async (req, res, next) => {
+  try {
+    // 從中介軟體取得使用者資訊
+    const userId = req.user.id;
+
+    // 從資料庫取得完整的使用者資料
+    const userRepository = dataSource.getRepository("User");
+    const user = await userRepository.findOne({
+      where: { id: userId },
+      select: ["id", "name", "email", "is_admin"],
+    });
+
+    // 檢查使用者是否存在
+    if (!user) {
+      return res.status(401).json({
+        status: false,
+        message: "Token 無效或過期，請重新登入",
+      });
+    }
+
+    // 檢查是否為管理員
+    if (!req.user.is_admin) {
+      return res.status(403).json({
+        status: false,
+        message: "權限不足，無法存取此資訊",
+      });
+    }
+
+    // 回傳管理者資料
+    res.status(200).json({
+      status: true,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.is_admin ? "admin" : "customer",
+        },
+      },
+    });
+  } catch (error) {
+    logger.error("取得管理者資料失敗:", error);
+    next(error);
+  }
+});
+
 // 管理者取得分類列表
 router.get("/categories", verifyToken, verifyAdmin, async (req, res, next) => {
   try {
