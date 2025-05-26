@@ -50,7 +50,7 @@ router.post("/log-in", async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 status: false,
-                message: "此 Email 尚未註冊或不具備管理權限",
+                message: "此 Email 尚未註冊",
             });
         }
 
