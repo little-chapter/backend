@@ -306,25 +306,26 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       }
     }
 
+  console.log(findProduct.title === (title ? title : findProduct.title));
     // 驗證商品資訊有變更
-    if(findProduct.title === title
-    && findProduct.author === author
-    && findProduct.illustrator === illustrator
-    && findProduct.publisher === publisher
-    && findProduct.isbn === isbn
-    && findProduct.description === description
-    && findProduct.introduction_html === introductionHtml
-    && findProduct.is_visible === toBoolean(isVisible)
-    && findProduct.price === price.toFixed(2)
-    && findProduct.discount_price === discountPrice.toFixed(2)
-    && findProduct.stock_quantity === stockQuantity
-    && findProduct.page_count === pageCount
-    && findProduct.publish_date === publishDate
-    && findProduct.age_range_id === Number(ageRangeId)
-    && findProduct.category_id === Number(categoryId)
-    && findProduct.is_new_arrival === toBoolean(isNewArrival)
-    && findProduct.is_bestseller === toBoolean(isBestseller)
-    && findProduct.is_discount === toBoolean(isDiscount)){
+    if(findProduct.title === (title ? title : findProduct.title)
+    && findProduct.author === (author ? author : findProduct.author)
+    && findProduct.illustrator === (illustrator ? illustrator : findProduct.illustrator)
+    && findProduct.publisher === (publisher ? publisher : findProduct.publisher)
+    && findProduct.isbn === (isbn ? isbn : findProduct.isbn)
+    && findProduct.description === (description ? description : findProduct.description)
+    && findProduct.introduction_html === (introductionHtml ? introductionHtml : findProduct.introductionHtml)
+    && findProduct.is_visible === (isVisible ? toBoolean(isVisible) : findProduct.isVisible)
+    && findProduct.price === (price ? price.toFixed(2) : findProduct.price)
+    && findProduct.discount_price === (discountPrice ? discountPrice.toFixed(2) : findProduct.discountPrice)
+    && findProduct.stock_quantity === (stockQuantity ? stockQuantity : findProduct.stockQuantity)
+    && findProduct.page_count === (pageCount ? pageCount : findProduct.pageCount)
+    && findProduct.publish_date === (publishDate ? publishDate : findProduct.publishDate)
+    && findProduct.age_range_id === (ageRangeId ? Number(ageRangeId) : findProduct.ageRangeId)
+    && findProduct.category_id === (categoryId ? Number(categoryId) : findProduct.categoryId)
+    && findProduct.is_new_arrival === (isNewArrival ? toBoolean(isNewArrival) : findProduct.isNewArrival)
+    && findProduct.is_bestseller === (isBestseller ? toBoolean(isBestseller) : findProduct.isBestseller)
+    && findProduct.is_discount === (isDiscount ? toBoolean(isDiscount) : findProduct.isDiscount)){
       res.status(400).json({
         "status": false,
         "message": "您輸入的商品資訊未變更"
