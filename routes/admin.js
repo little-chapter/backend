@@ -107,7 +107,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
   try{
     // 讀取使用者輸入的資料（req.params, req.body）
     // 驗證使用者輸入的為有效資料。 這邊被「undefined」、「短路運算」與「型別轉換」的概念卡了半天..
-    // 驗證 productId 存在資料庫
+    // 驗證存在資料庫
     // 驗證 isbn 與資料庫的不重複
     // 驗證商品資訊有變更
     // 將使用者輸入的資料更新至資料庫
@@ -132,10 +132,24 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
             isDiscount = null } = req.body;
 
     // 驗證使用者輸入的為有效資料
-    if(isNotValidInteger(Number(productId))){
+    if(!productId
+    || !title 
+    || !isVisible 
+    || !price 
+    || !stockQuantity 
+    || !ageRangeId 
+    || !categoryId ){
       res.status(400).json({
         "status": false,
-	      "message" : "欄位未填寫正確",
+	      "message" : "必填欄位未填寫（productId, title, isVisible, price, stockQuantity, ageRangeId, categoryId）"
+      });
+      return;
+    }
+
+    if(isNotValidInteger(Number(productId)) || Number.isNaN(Number(productId))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "productId 填寫未符合規則",
       });
       return;
     }
@@ -182,7 +196,6 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
         });
         return;
     }
-
     if(description){
       if(isNotValidString(description) || description.length < 3 || description.length > 200){
         res.status(400).json({
@@ -208,28 +221,28 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       });
       return;
     }
-    if(isNotValidInteger(Number(price))){
+    if(isNotValidInteger(Number(price)) || Number.isNaN(Number(price))){
       res.status(400).json({
         "status": false,
 	      "message" : "price 必須為正整數"
       });
       return;
     }
-    if(isNotValidInteger(Number(discountPrice))){
+    if(isNotValidInteger(Number(discountPrice)) || Number.isNaN(Number(discountPrice))){
       res.status(400).json({
         "status": false,
 	      "message" : "discountPrice 必須為正整數"
       });
       return;
     }
-    if(isNotValidInteger(Number(stockQuantity))){
+    if(isNotValidInteger(Number(stockQuantity)) || Number.isNaN(Number(stockQuantity))){
       res.status(400).json({
         "status": false,
 	      "message" : "stockQuantity 必須為正整數"
       });
       return;
     }
-    if(isNotValidInteger(Number(pageCount))){
+    if(isNotValidInteger(Number(pageCount)) || Number.isNaN(Number(pageCount))){
       res.status(400).json({
         "status": false,
 	      "message" : "pageCount 必須為正整數"
@@ -252,34 +265,22 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       });
       return;
     }
-    if(ageRangeId){
-      const ageRangesRepo = dataSource.getRepository("AgeRanges");
-      const findAgeRanges = await ageRangesRepo.findOne({
-        where:{"id": ageRangeId}
-      });
-      if(!findAgeRanges){
-        res.status(400).json({
+    if(isNotValidInteger(Number(ageRangeId)) || Number.isNaN(Number(ageRangeId))){
+      res.status(400).json({
           "status": false,
           "message" : "ageRangeId 填寫未符合規則",
         });
         return;
-      }
     }
-    if(categoryId){
-      const categoriesRepo = dataSource.getRepository("Categories");
-      const findcategories = await categoriesRepo.findOne({
-        where:{"id": categoryId}
-      });
-      if(!findcategories){
-        res.status(400).json({
+    if(isNotValidInteger(Number(categoryId)) || Number.isNaN(Number(categoryId))){
+      res.status(400).json({
           "status": false,
           "message" : "categoryId 填寫未符合規則",
         });
         return;
-      }
     }
 
-    // 驗證 productId 是否存在資料庫
+    // 驗證是否存在資料庫
     const productsRepo = dataSource.getRepository("Products");
     const findProduct = await productsRepo.findOne({
       where:{"id": productId}
@@ -288,6 +289,28 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       res.status(404).json({
         "status": false,
 	      "message" : "找不到此商品",
+      });
+      return;
+    }
+    const ageRangesRepo = dataSource.getRepository("AgeRanges");
+    const findAgeRanges = await ageRangesRepo.findOne({
+      where:{"id": ageRangeId}
+    });
+    if(!findAgeRanges){
+      res.status(404).json({
+        "status": false,
+        "message" : "找不到此年齡分類",
+      });
+      return;
+    }
+    const categoriesRepo = dataSource.getRepository("Categories");
+    const findcategories = await categoriesRepo.findOne({
+      where:{"id": categoryId}
+    });
+    if(!findcategories){
+      res.status(404).json({
+        "status": false,
+        "message" : "找不到此主題分類",
       });
       return;
     }
@@ -306,7 +329,6 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       }
     }
 
-  console.log(findProduct.title === (title ? title : findProduct.title));
     // 驗證商品資訊有變更
     if(findProduct.title === (title ? title : findProduct.title)
     && findProduct.author === (author ? author : findProduct.author)
@@ -314,18 +336,18 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     && findProduct.publisher === (publisher ? publisher : findProduct.publisher)
     && findProduct.isbn === (isbn ? isbn : findProduct.isbn)
     && findProduct.description === (description ? description : findProduct.description)
-    && findProduct.introduction_html === (introductionHtml ? introductionHtml : findProduct.introductionHtml)
-    && findProduct.is_visible === (isVisible ? toBoolean(isVisible) : findProduct.isVisible)
-    && findProduct.price === (price ? price.toFixed(2) : findProduct.price)
-    && findProduct.discount_price === (discountPrice ? discountPrice.toFixed(2) : findProduct.discountPrice)
-    && findProduct.stock_quantity === (stockQuantity ? stockQuantity : findProduct.stockQuantity)
-    && findProduct.page_count === (pageCount ? pageCount : findProduct.pageCount)
-    && findProduct.publish_date === (publishDate ? publishDate : findProduct.publishDate)
-    && findProduct.age_range_id === (ageRangeId ? Number(ageRangeId) : findProduct.ageRangeId)
-    && findProduct.category_id === (categoryId ? Number(categoryId) : findProduct.categoryId)
-    && findProduct.is_new_arrival === (isNewArrival ? toBoolean(isNewArrival) : findProduct.isNewArrival)
-    && findProduct.is_bestseller === (isBestseller ? toBoolean(isBestseller) : findProduct.isBestseller)
-    && findProduct.is_discount === (isDiscount ? toBoolean(isDiscount) : findProduct.isDiscount)){
+    && findProduct.introduction_html === (introductionHtml ? introductionHtml : findProduct.introduction_html)
+    && findProduct.is_visible === (isVisible ? toBoolean(isVisible) : findProduct.is_visible)
+    && findProduct.price === (price ? Number(price).toFixed(2) : findProduct.price)
+    && findProduct.discount_price === (discountPrice ? Number(discountPrice).toFixed(2) : findProduct.discount_price)
+    && findProduct.stock_quantity === (stockQuantity ? Number(stockQuantity) : findProduct.stock_quantity)
+    && findProduct.page_count === (pageCount ? Number(pageCount) : findProduct.page_count)
+    && findProduct.publish_date === (publishDate ? publishDate : findProduct.publish_date)
+    && findProduct.age_range_id === (ageRangeId ? Number(ageRangeId) : findProduct.age_range_id)
+    && findProduct.category_id === (categoryId ? Number(categoryId) : findProduct.category_id)
+    && findProduct.is_new_arrival === (isNewArrival ? toBoolean(isNewArrival) : findProduct.is_new_arrival)
+    && findProduct.is_bestseller === (isBestseller ? toBoolean(isBestseller) : findProduct.is_bestseller)
+    && findProduct.is_discount === (isDiscount ? toBoolean(isDiscount) : findProduct.is_discount)){
       res.status(400).json({
         "status": false,
         "message": "您輸入的商品資訊未變更"
@@ -394,19 +416,19 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
             isDiscount } = req.body;
 
     // 驗證使用者輸入的為有效資料
-    if(!title || isNotValidString(title)
+    if(!title 
     || isVisible === undefined
     || price === undefined
     || stockQuantity === undefined
-    || !ageRangeId || isNotValidInteger(Number(ageRangeId))
-    || !categoryId || isNotValidInteger(Number(categoryId)) ){
+    || !ageRangeId
+    || !categoryId ){
       res.status(400).json({
         "status": false,
-	      "message" : "必填欄位未填寫或填寫錯誤（title, isVisible, price, stockQuantity, ageRangeId, categoryId）",
+	      "message" : "必填欄位未填寫（title, isVisible, price, stockQuantity, ageRangeId, categoryId）"
       });
       return;
     }
-    if(title.length < 3 || title.length > 50 ){
+    if(isNotValidString(title) || title.length < 3 || title.length > 50 ){
       res.status(400).json({
         "status": false,
 	      "message" : "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
@@ -420,17 +442,31 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
       });
       return;
     }
-    if(isNotValidInteger(Number(price))){
+    if(isNotValidInteger(Number(price)) || Number.isNaN(Number(price))){
       res.status(400).json({
         "status": false,
 	      "message" : "price 必須為正整數",
       });
       return;
     }
-    if(isNotValidInteger(Number(stockQuantity))){
+    if(isNotValidInteger(Number(stockQuantity)) || Number.isNaN(Number(stockQuantity))){
       res.status(400).json({
         "status": false,
 	      "message" : "stockQuantity 必須為正整數",
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(ageRangeId)) || Number.isNaN(Number(ageRangeId))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "ageRangeId 填寫未符合規則",
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(categoryId)) || Number.isNaN(Number(categoryId))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "categoryId 填寫未符合規則",
       });
       return;
     }
@@ -439,9 +475,9 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
       where:{"id": ageRangeId}
     });
     if(!findAgeRanges){
-      res.status(400).json({
+      res.status(404).json({
         "status": false,
-	      "message" : "ageRangeId 填寫未符合規則",
+	      "message" : "找不到此年齡分類",
       });
       return;
     }
@@ -450,9 +486,9 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
       where:{"id": categoryId}
     });
     if(!findcategories){
-      res.status(400).json({
+      res.status(404).json({
         "status": false,
-	      "message" : "categoryId 填寫未符合規則",
+	      "message" : "找不到此主題分類",
       });
       return;
     }
@@ -508,14 +544,14 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
         return;
       }
     }
-    if(discountPrice && isNotValidInteger(discountPrice)){
+    if(discountPrice && isNotValidInteger(Number(discountPrice)) || Number.isNaN(Number(discountPrice))){
         res.status(400).json({
         "status": false,
 	      "message" : "discountPrice 必須為正整數"
         });
         return;
     }
-    if(pageCount && isNotValidInteger(pageCount)){
+    if(pageCount && isNotValidInteger(Number(pageCount)) || Number.isNaN(Number(pageCount))){
         res.status(400).json({
         "status": false,
 	      "message" : "pageCount 必須為正整數"

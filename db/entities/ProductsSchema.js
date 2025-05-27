@@ -129,11 +129,6 @@ module.exports = new EntitySchema({
                 foreignKeyConstraintName: "products_categories_id_fk"
             },
             onDelete:"RESTRICT"
-        },
-        ProductImages: {
-        target: "ProductImages",
-        type: "one-to-many",
-        inverseSide: "Products", // 若 ProductImages 有定義 `Products` 為 relation
         }
     }
 })
