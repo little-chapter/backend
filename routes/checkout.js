@@ -177,7 +177,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         })
         if(missingIds.length !== 0){
             logger.warn("部分商品不存在");
-            res.status(400).json({
+            res.status(404).json({
                 "status": false,
                 "message": "部分商品不存在"
             })
