@@ -45,7 +45,7 @@ router.get("/dashboard", verifyToken, verifyAdmin, async(req, res, next)=>{
 
 
     res.status(200).json({
-      "status": "true",
+      "status": true,
       "data": {
         "summary": {
           "revenue": 15231.89,  // 本月收入
@@ -81,23 +81,18 @@ router.get("/task", verifyToken, verifyAdmin, async(req, res, next)=>{
   try{
     const ordersRepo = dataSource.getRepository("Orders");
     const countShip = await ordersRepo.count({
-      where:{"order_status": "待出貨"}
+      where:{"order_status": "pending"}
     });
     const countReturn = await ordersRepo.count({
-      where:{"shipping_status": "退貨"}
-    });
-    const notificationsRepo = dataSource.getRepository("Notifications");
-    const countNotifications = await notificationsRepo.count({
-      where:{"is_read": false, "is_deleted": false} // 不確定是不是這樣
+      where:{"shipping_status": "returned"}
     });
 
     res.status(200).json({
-      "status": "true",
+      "status": true,
         "data": {
           "pendingTasks": {
             "pendingShipments": countShip,
             "pendingRefunds": countReturn,
-            "recentNotifications": countNotifications
           }
         }
     });
@@ -106,95 +101,58 @@ router.get("/task", verifyToken, verifyAdmin, async(req, res, next)=>{
     next(error);
   }
 });
-// 管理者編輯商品
+
+// 管理者更新商品
 router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
   try{
     // 讀取使用者輸入的資料（req.params, req.body）
-    // 驗證使用者輸入的為有效資料（必填、非必填欄位） 這邊被「undefined」、「短路運算」與「型別轉換」的概念卡了半天..
-    // 驗證 isbn 不能和自己以外的商品重複，因為資料庫定義該欄為唯一值
+    // 驗證使用者輸入的為有效資料。 這邊被「undefined」、「短路運算」與「型別轉換」的概念卡了半天..
+    // 驗證 productId 存在資料庫
+    // 驗證 isbn 與資料庫的不重複
     // 驗證商品資訊有變更
     // 將使用者輸入的資料更新至資料庫
-    const { productId } = req.params;
-    const { title,
-            author,
-            illustrator,
-            publisher,
-            isbn,
-            description,
-            introductionHtml,
-            isVisible,
-            price,
-            discountPrice,
-            stockQuantity,
-            pageCount,
-            publishDate,
-            ageRangeId,
-            categoryId,
-            isNewArrival,
-            isBestseller,
-            isDiscount } = req.body;
+    const { productId = null } = req.params; // 若使用者沒填，就設為 null，避免變成 undefined
+    const { title = null,
+            author = null,
+            illustrator = null,
+            publisher = null,
+            isbn = null,
+            description = null,
+            introductionHtml = null,
+            isVisible = null,
+            price = null,
+            discountPrice = null,
+            stockQuantity = null,
+            pageCount = null,
+            publishDate = null,
+            ageRangeId = null,
+            categoryId = null,
+            isNewArrival = null,
+            isBestseller = null,
+            isDiscount = null } = req.body;
 
-    // 驗證必填欄位為有效資料
-    const productsRepo = dataSource.getRepository("Products");
-    const findProduct = await productsRepo.findOne({
-      where:{"id": productId}
-    });
-    if(!findProduct){
-      res.status(404).json({
-        "status" : "false",
-	      "message" : "找不到此商品",
-      });
-      return;
-    }
-    if(!title || isNotValidString(title)
-    || isVisible === undefined || !isBoolean(isVisible)
-    || price === undefined || isNotValidInteger(Number(price))
-    || stockQuantity === undefined || isNotValidInteger(Number(stockQuantity))
-    || !ageRangeId || isNotValidInteger(Number(ageRangeId))
-    || !categoryId || isNotValidInteger(Number(categoryId)) ){
+    // 驗證使用者輸入的為有效資料
+    if(isNotValidInteger(Number(productId))){
       res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "欄位未填寫正確",
       });
       return;
     }
-    if(title.length < 3 || title.length > 50 ){
-      res.status(400).json({
-        "status" : "false",
-	      "message" : "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
-      });
-      return;
+    if(title){
+      if(isNotValidString(title) || title.length < 3 || title.length > 50 ){
+        res.status(400).json({
+          "status": false,
+          "message" : "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
+        });
+        return;
+      }
     }
-    const ageRangesRepo = dataSource.getRepository("AgeRanges");
-    const findAgeRanges = await ageRangesRepo.findOne({
-      where:{"id": ageRangeId}
-    });
-  
-    if(!findAgeRanges){
-      res.status(400).json({
-        "status" : "false",
-	      "message" : "ageRangeId 填寫未符合規則",
-      });
-      return;
-    }
-    const categoriesRepo = dataSource.getRepository("Categories");
-    const findcategories = await categoriesRepo.findOne({
-      where:{"id": categoryId}
-    });
-    if(!findcategories){
-      res.status(400).json({
-        "status" : "false",
-	      "message" : "categoryId 填寫未符合規則",
-      });
-      return;
-    }
-    
-    // 驗證非必填欄位為有效資料
     if(author){
       if(isNotValidString(author) || author.length < 2 || author.length > 50){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "author 必須為有效的字元（至少 2 個字元，最多 50 字元）"
+          "status": false,
+          "message" : "author 必須為有效的字元（至少 2 個字元，最多 50 字元）"
         });
         return;
       }
@@ -202,8 +160,8 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     if(illustrator){
       if(isNotValidString(illustrator) || illustrator.length < 2 || illustrator.length > 50){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "illustrator 必須為有效的字元（至少 2 個字元，最多 50 字元）"
+          "status": false,
+          "message" : "illustrator 必須為有效的字元（至少 2 個字元，最多 50 字元）"
         });
         return;
       }
@@ -211,24 +169,25 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     if(publisher){
       if(isNotValidString(publisher) || publisher.length < 4 || publisher.length > 200){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "publisher 必須為有效的字元（至少 4 個字元，最多 200 字元）"
+          "status": false,
+          "message" : "publisher 必須為有效的字元（至少 4 個字元，最多 200 字元）"
         });
         return;
       }
     }
     if(isbn && !validator.isISBN(isbn)){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "isbn 必須為有效的 ISBN 格式"
+          "status": false,
+          "message" : "isbn 必須為有效的 ISBN 格式"
         });
         return;
     }
+
     if(description){
       if(isNotValidString(description) || description.length < 3 || description.length > 200){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "description 必須為有效的字元（至少 3 個字元，最多 200 字元）"
+          "status": false,
+          "message" : "description 必須為有效的字元（至少 3 個字元，最多 200 字元）"
         });
         return;
       }
@@ -236,38 +195,99 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     if(introductionHtml){
       if(isNotValidString(introductionHtml) || introductionHtml.length < 3 || introductionHtml.length > 200){
         res.status(400).json({
-        "status" : "false",
-	      "message" : "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
+          "status": false,
+          "message" : "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
         });
         return;
       }
     }
-    if(discountPrice && isNotValidInteger(discountPrice)){
-        res.status(400).json({
-        "status" : "false",
+    if(!isBoolean(isVisible)){
+      res.status(400).json({
+        "status": false,
+        "message": "isVisible 必須為布林格式"
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(price))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "price 必須為正整數"
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(discountPrice))){
+      res.status(400).json({
+        "status": false,
 	      "message" : "discountPrice 必須為正整數"
-        });
-        return;
+      });
+      return;
     }
-    if(pageCount && isNotValidInteger(pageCount)){
-        res.status(400).json({
-        "status" : "false",
+    if(isNotValidInteger(Number(stockQuantity))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "stockQuantity 必須為正整數"
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(pageCount))){
+      res.status(400).json({
+        "status": false,
 	      "message" : "pageCount 必須為正整數"
-        });
-        return;
+      });
+      return;
     }
-    if (publishDate && !validator.isDate(publishDate)) {
-      return res.status(400).json({
-        "status": "false",
+    if(!validator.isDate(publishDate)) {
+      res.status(400).json({
+        "status": false,
         "message": "publishDate 必須為有效的日期格式"
       });
+      return;
     }
-    if (isNewArrival !== undefined && !isBoolean(isNewArrival)
-    || isBestseller !== undefined && !isBoolean(isBestseller)
-    || isDiscount !== undefined && !isBoolean(isDiscount)){
+    if(!isBoolean(isNewArrival)
+    || !isBoolean(isBestseller)
+    || !isBoolean(isDiscount)){
       res.status(400).json({
-        "status": "false",
+        "status": false,
         "message": "布林欄位格式錯誤（例如 isNewArrival, isBestseller, isDiscount）"
+      });
+      return;
+    }
+    if(ageRangeId){
+      const ageRangesRepo = dataSource.getRepository("AgeRanges");
+      const findAgeRanges = await ageRangesRepo.findOne({
+        where:{"id": ageRangeId}
+      });
+      if(!findAgeRanges){
+        res.status(400).json({
+          "status": false,
+          "message" : "ageRangeId 填寫未符合規則",
+        });
+        return;
+      }
+    }
+    if(categoryId){
+      const categoriesRepo = dataSource.getRepository("Categories");
+      const findcategories = await categoriesRepo.findOne({
+        where:{"id": categoryId}
+      });
+      if(!findcategories){
+        res.status(400).json({
+          "status": false,
+          "message" : "categoryId 填寫未符合規則",
+        });
+        return;
+      }
+    }
+
+    // 驗證 productId 是否存在資料庫
+    const productsRepo = dataSource.getRepository("Products");
+    const findProduct = await productsRepo.findOne({
+      where:{"id": productId}
+    });
+    if(!findProduct){
+      res.status(404).json({
+        "status": false,
+	      "message" : "找不到此商品",
       });
       return;
     }
@@ -279,7 +299,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
       });
       if(findIsbn && findIsbn.id != productId){
         res.status(409).json({
-          "status": "false",
+          "status": false,
           "message": "ISBN 已重複，請確認"
         });
         return;
@@ -288,13 +308,25 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
 
     // 驗證商品資訊有變更
     if(findProduct.title === title
-      && findProduct.is_visible === toBoolean(isVisible)
-      && findProduct.price === price.toFixed(2)
-      && findProduct.stock_quantity === Number(stockQuantity)
-      && findProduct.age_range_id === Number(ageRangeId)
-      && findProduct.category_id === Number(categoryId)){
-        res.status(400).json({
-        "status": "false",
+    && findProduct.author === author
+    && findProduct.illustrator === illustrator
+    && findProduct.publisher === publisher
+    && findProduct.isbn === isbn
+    && findProduct.description === description
+    && findProduct.introduction_html === introductionHtml
+    && findProduct.is_visible === toBoolean(isVisible)
+    && findProduct.price === price.toFixed(2)
+    && findProduct.discount_price === discountPrice.toFixed(2)
+    && findProduct.stock_quantity === stockQuantity
+    && findProduct.page_count === pageCount
+    && findProduct.publish_date === publishDate
+    && findProduct.age_range_id === Number(ageRangeId)
+    && findProduct.category_id === Number(categoryId)
+    && findProduct.is_new_arrival === toBoolean(isNewArrival)
+    && findProduct.is_bestseller === toBoolean(isBestseller)
+    && findProduct.is_discount === toBoolean(isDiscount)){
+      res.status(400).json({
+        "status": false,
         "message": "您輸入的商品資訊未變更"
       });
       return;
@@ -303,29 +335,29 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     // 將使用者輸入的資料更新至資料庫
     const updateProduct = await productsRepo.update(
       { "id": productId },
-      { title,
+      { "title": title ? title : findProduct.title,
         "is_visible": toBoolean(isVisible),
-        "price": Number(price),
-        "stock_quantity": Number(stockQuantity),
-        "age_range_id": Number(ageRangeId),
-        "category_id": Number(categoryId),
+        "price": price ? Number(price) : findProduct.price,
+        "stock_quantity": stockQuantity ? Number(stockQuantity) : findProduct.stock_quantity,
+        "age_range_id": ageRangeId ? Number(ageRangeId) : findProduct.age_range_id,
+        "category_id": categoryId ? Number(categoryId) : findProduct.category_id,
         "author": author ? author : findProduct.author,
         "illustrator": illustrator ? illustrator : findProduct.illustrator,
         "publisher": publisher ? publisher : findProduct.publisher,
         "isbn": isbn ? isbn : findProduct.isbn,
-        "description": description ? description : findProduct.descriptiion,
+        "description": description ? description : findProduct.description,
         "introduction_html": introductionHtml ? introductionHtml : findProduct.introduction_html,
         "discount_price": discountPrice ? discountPrice : findProduct.discount_price,
         "page_count": pageCount ? pageCount : findProduct.page_count,
         "publish_date": publishDate ? publishDate : findProduct.publish_date,
         "is_new_arrival": toBoolean(isNewArrival),
         "is_bestseller": toBoolean(isBestseller),
-        "is_discount": toBoolean(isDiscount)
+        "is_discount": toBoolean(isDiscount),
+        "updated_at": new Date()
     });
-
     res.status(200).json({
-      "status": "ture",
-      "message": "商品編輯成功"
+      "status": true,
+      "message": "商品更新成功"
     });
 
   }catch(error){
@@ -333,6 +365,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     next(error);
   }
 });
+
 // 管理者新增商品
 router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
   try{
@@ -359,23 +392,44 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
             isBestseller,
             isDiscount } = req.body;
 
-    // 驗證必填欄位需為有效資料
+    // 驗證使用者輸入的為有效資料
     if(!title || isNotValidString(title)
-    || isVisible === undefined || !isBoolean(isVisible)
-    || price === undefined || isNotValidInteger(Number(price))
-    || stockQuantity === undefined || isNotValidInteger(Number(stockQuantity))
+    || isVisible === undefined
+    || price === undefined
+    || stockQuantity === undefined
     || !ageRangeId || isNotValidInteger(Number(ageRangeId))
     || !categoryId || isNotValidInteger(Number(categoryId)) ){
       res.status(400).json({
-        "status" : "false",
-	      "message" : "欄位未填寫正確",
+        "status": false,
+	      "message" : "必填欄位未填寫或填寫錯誤（title, isVisible, price, stockQuantity, ageRangeId, categoryId）",
       });
       return;
     }
     if(title.length < 3 || title.length > 50 ){
       res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
+      });
+      return;
+    }
+    if(isVisible && !isBoolean(isVisible)){
+      res.status(400).json({
+        "status": false,
+	      "message" : "isVisible 必須為布林格式",
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(price))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "price 必須為正整數",
+      });
+      return;
+    }
+    if(isNotValidInteger(Number(stockQuantity))){
+      res.status(400).json({
+        "status": false,
+	      "message" : "stockQuantity 必須為正整數",
       });
       return;
     }
@@ -383,10 +437,9 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     const findAgeRanges = await ageRangesRepo.findOne({
       where:{"id": ageRangeId}
     });
-  
     if(!findAgeRanges){
       res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "ageRangeId 填寫未符合規則",
       });
       return;
@@ -397,17 +450,15 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     });
     if(!findcategories){
       res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "categoryId 填寫未符合規則",
       });
       return;
     }
-    
-    // 驗證非必填欄位需為有效資料
     if(author){
       if(isNotValidString(author) || author.length < 2 || author.length > 50){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "author 必須為有效的字元（至少 2 個字元，最多 50 字元）"
         });
         return;
@@ -416,7 +467,7 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     if(illustrator){
       if(isNotValidString(illustrator) || illustrator.length < 2 || illustrator.length > 50){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "illustrator 必須為有效的字元（至少 2 個字元，最多 50 字元）"
         });
         return;
@@ -425,7 +476,7 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     if(publisher){
       if(isNotValidString(publisher) || publisher.length < 4 || publisher.length > 200){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "publisher 必須為有效的字元（至少 4 個字元，最多 200 字元）"
         });
         return;
@@ -433,7 +484,7 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     }
     if(isbn && !validator.isISBN(isbn)){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "isbn 必須為有效的 ISBN 格式"
         });
         return;
@@ -441,7 +492,7 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     if(description){
       if(isNotValidString(description) || description.length < 3 || description.length > 200){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "description 必須為有效的字元（至少 3 個字元，最多 200 字元）"
         });
         return;
@@ -450,7 +501,7 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     if(introductionHtml){
       if(isNotValidString(introductionHtml) || introductionHtml.length < 3 || introductionHtml.length > 200){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
         });
         return;
@@ -458,55 +509,58 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     }
     if(discountPrice && isNotValidInteger(discountPrice)){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "discountPrice 必須為正整數"
         });
         return;
     }
     if(pageCount && isNotValidInteger(pageCount)){
         res.status(400).json({
-        "status" : "false",
+        "status": false,
 	      "message" : "pageCount 必須為正整數"
         });
         return;
     }
-    if (publishDate && !validator.isDate(publishDate)) {
-      return res.status(400).json({
-        "status": "false",
+    if(publishDate && !validator.isDate(publishDate)) {
+      res.status(400).json({
+        "status": false,
         "message": "publishDate 必須為有效的日期格式"
       });
+      return;
     }
-    if (isNewArrival !== undefined && !isBoolean(isNewArrival)
+    if(isNewArrival !== undefined && !isBoolean(isNewArrival)
     || isBestseller !== undefined && !isBoolean(isBestseller)
     || isDiscount !== undefined && !isBoolean(isDiscount)){
       res.status(400).json({
-        "status": "false",
+        "status": false,
         "message": "布林欄位格式錯誤（例如 isNewArrival, isBestseller, isDiscount）"
       });
       return;
     }
+
     // 驗證 isbn 不能重複
     const productsRepo = dataSource.getRepository("Products");
-    const findProduct = await productsRepo.findOne({
-      where: {isbn}
-    });
-    if(findProduct){
-      res.status(409).json({
-        "status": "false",
-        "message": "ISBN 已重複，請確認"
+    if(isbn){
+      const findProduct = await productsRepo.findOne({
+        where: {isbn}
       });
-      return;
+      if(findProduct){
+        res.status(409).json({
+          "status": false,
+          "message": "ISBN 已重複，請確認"
+        });
+        return;
+      }
     }
+
     // 將使用者輸入的資料寫入資料庫
     const createProduct = productsRepo.create({
-      // 必填欄位
       title,
       "is_visible": toBoolean(isVisible),
       "price": Number(price),
       "stock_quantity": Number(stockQuantity),
       "age_range_id": Number(ageRangeId),
       "category_id": Number(categoryId),
-      // 非必填欄位
       "author": author ? author : null,
       "illustrator": illustrator ? illustrator : null,
       "publisher": publisher ? publisher : null,
@@ -521,9 +575,8 @@ router.post("/products", verifyToken, verifyAdmin, async(req, res, next)=>{
       "is_discount": toBoolean(isDiscount)
     });
     await productsRepo.save(createProduct);
-
-    res.status(200).json({
-      "status": "ture",
+    res.status(201).json({
+      "status": true,
       "message": "商品新增成功"
     });
   }catch(error){
