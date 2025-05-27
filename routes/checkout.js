@@ -8,8 +8,6 @@ const { isUUID } = require("validator");
 const { addOneDayToUtc } = require("../utils/datetimeUtils");
 const { generateTradeInfo } = require("../utils/generateTradeinfo");
 
-const { FRONTEND_URL } = process.env;
-
 router.post("/", verifyToken, async(req, res, next)=>{
     try{
         let {totalAmount, discountAmount, shippingFee, finalAmount, discountCode, items, paymentMethod, shippingMethod,
@@ -207,7 +205,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 }
             })
             logger.warn("部分商品庫存不足");
-            res.status(400).json({
+            res.status(409).json({
                 "status": false,
                 "message": "部分商品庫存不足",
                 "errors": outOfStockResult
@@ -246,10 +244,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 .execute();
             if(pendingOrder.identifiers.length === 0){
                 logger.warn("新增暫存訂單失敗");
-                res.status(400).json({
-                    status: false,
-                    message: "新增暫存訂單失敗"
-                })
+                console.log("新增暫存訂單失敗")
                 return
             }
             const pendingOrderId = pendingOrder.identifiers[0].id;
@@ -278,10 +273,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 .execute();
             if(orderItemResult.identifiers.length === 0){
                 logger.warn("新增暫存訂單商品關聯失敗");
-                res.status(400).json({
-                    status: false,
-                    message: "新增暫存訂單商品關聯失敗"
-                })
+                console.log("新增暫存訂單商品關聯失敗")
                 return
             }
         })
@@ -289,8 +281,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         res.status(200).json({
             status: true,
             message: "轉向第三方金流處理付款",
-            data: order,
-            // redirectUrl:
+            data: order
         })
     }catch(error){
         logger.error('付款結帳錯誤:', error);
