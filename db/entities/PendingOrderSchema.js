@@ -106,8 +106,7 @@ module.exports = new EntitySchema({
             nullable: true,
         },
         discount_code:{
-            type: "varchar",
-            length: 50,
+            type: "integer",
             nullable: true,
         },
         created_at: {

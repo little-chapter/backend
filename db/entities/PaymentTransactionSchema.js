@@ -48,7 +48,7 @@ module.exports = new EntitySchema({
             nullable: false,
         },
         payment_time: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
         },
         bank_code: {
