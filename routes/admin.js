@@ -29,45 +29,164 @@ function toBoolean(value){
 // 取得後台首頁的銷售統計
 router.get("/dashboard", verifyToken, verifyAdmin, async(req, res, next)=>{
   try{
-    // const ordersRepo = dataSource.getRepository("Orders");
-    // const revenue = await ordersRepo.sum({
-    //   where:{}
-    // });
+    const paymentRepo = dataSource.getRepository("PaymentTransactions");
+    const orderItemsRepo = dataSource.getRepository("OrderItems");
+    const ordersRepo = dataSource.getRepository("Orders");
+    const productsRepo = dataSource.getRepository("Products");
+    const categoryRepo = dataSource.getRepository("Categories");
 
+    // 取得當現在年月及上個月年月
     const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1; // 0-based
-    const currentMonth = `${year}年${month}月`;
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // JavaScript 月份 0-11
+    const currentYearMonth = `${currentYear}年${currentMonth}月`;
+    // const currentYearMonth = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
+    let prevYear = currentYear;
+    let prevMonth = currentMonth - 1;
+    if (prevMonth === 0) {
+        prevMonth = 12;
+        prevYear -= 1;
+    }
+    const startDate = new Date(currentYear, currentMonth - 1, 1);
+    const endDate = new Date(currentYear, currentMonth, 1);
+    const prevYearMonth = `${prevYear}年${prevMonth}月`;
+    
+    // 利用 payment_time 作為交易時間，計算本月及上月成功付款的營收總和
+    // 狀態選擇 'success' (請依實際資料調整)
+    const getMonthRevenue = async (year, month) => {
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 1);
+        const result = await paymentRepo.createQueryBuilder('pt')
+            .select('COALESCE(SUM(pt.amount), 0)', 'total')
+            .where('pt.status = :status', { status: 'success' })
+            .andWhere('pt.payment_time >= :startDate AND pt.payment_time < :endDate', { startDate, endDate })
+            .getRawOne();
+// console.log("result:", result);
+        return parseFloat(result.total);
+        
+    };
+    // 本月營收
+    const currentMonthRevenue = await getMonthRevenue(currentYear, currentMonth);
+    // 上月營收
+    const prevMonthRevenue = await getMonthRevenue(prevYear, prevMonth);
 
-    const currentMonthStart = new Date(`${year}-${month}-01`);  // 會顯示為 UTC+0 的時間，但是台灣是 UTC+8
-    const lastMonthStart = new Date(`${year}-${month - 1}-01`); // @要確認訂單創建的時間是 UTC+0 或 +8
-    const nextMonthStart = new Date(`${year}-${month + 1}-01`); 
+    // 營收成長率計算
+    const revenueGrowthRate = prevMonthRevenue === 0
+        ? null
+        : ((currentMonthRevenue - prevMonthRevenue) / prevMonthRevenue) * 100;
 
+    // 計算本月與上月訂單數量 (使用 Orders.completed_at 作為訂單完成時間)
+    const getMonthOrderCount = async (year, month) => {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+      const count = await ordersRepo.createQueryBuilder('o')
+          .where('o.completed_at IS NOT NULL')
+          .andWhere('o.completed_at >= :startDate AND o.completed_at < :endDate', { startDate, endDate })
+          .getCount();
+      return count;
+    };
+
+    const currentMonthOrderCount = await getMonthOrderCount(currentYear, currentMonth);
+    const prevMonthOrderCount = await getMonthOrderCount(prevYear, prevMonth);
+
+    // 訂單成長率計算
+    const orderGrowthRate = prevMonthOrderCount === 0
+        ? null
+        : ((currentMonthOrderCount - prevMonthOrderCount) / prevMonthOrderCount) * 100;
+
+    // 取得本月書籍銷售量（OrderItems.quantity 加總，須關聯 Orders.completed_at 篩選時間）
+    const getMonthBookSalesQuantity = async (year, month) => {
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 1);
+      const qb = orderItemsRepo.createQueryBuilder('oi')
+          .innerJoin('oi.Orders', 'o')
+          .where('o.completed_at IS NOT NULL')
+          .andWhere('o.completed_at >= :startDate AND o.completed_at < :endDate', { startDate, endDate })
+          .select('SUM(oi.quantity)', 'totalQuantity');
+
+      const result = await qb.getRawOne();
+      return result.totalQuantity ? parseInt(result.totalQuantity) : 0;
+  };
+
+    const currentMonthBookSales = await getMonthBookSalesQuantity(currentYear, currentMonth);
+    const prevMonthBookSales = await getMonthBookSalesQuantity(prevYear, prevMonth);
+
+    // 書籍銷售量成長率計算
+    const bookSalesGrowthRate = prevMonthBookSales === 0
+        ? null
+        : ((currentMonthBookSales - prevMonthBookSales) / prevMonthBookSales) * 100;
+
+
+    const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    // 初始化陣列
+    const monthlyRevenue = Array(12).fill(0);
+    const monthlyOrders = Array(12).fill(0);
+
+    // 逐月查詢
+    for (let month = 1; month <= 12; month++) {
+      const startDate = new Date(currentYear, month - 1, 1);
+      const endDate = new Date(currentYear, month, 1);
+
+      // 營收統計（使用 payment_time 與 status = 'success'）
+      const revenueResult = await paymentRepo.createQueryBuilder('pt')
+        .select('COALESCE(SUM(pt.amount), 0)', 'total')
+        .where('pt.status = :status', { status: 'success' })
+        .andWhere('pt.payment_time >= :startDate AND pt.payment_time < :endDate', { startDate, endDate })
+        .getRawOne();
+      monthlyRevenue[month - 1] = parseFloat(revenueResult.total);
+
+      // 訂單數統計（使用 completed_at）
+      const orderCount = await ordersRepo.createQueryBuilder('o')
+        .where('o.completed_at IS NOT NULL')
+        .andWhere('o.completed_at >= :startDate AND o.completed_at < :endDate', { startDate, endDate })
+        .getCount();
+      monthlyOrders[month - 1] = orderCount;
+    }
+
+    // 回傳格式
+    const monthlySales = {
+      labels,
+      "revenue": monthlyRevenue,
+      "orders": monthlyOrders
+    };
+
+    // 當月類別統計
+    const categoryStatsRaw = await orderItemsRepo
+      .createQueryBuilder('oi')
+      .innerJoin('oi.Orders', 'o')
+      .innerJoin('oi.Products', 'p')
+      .innerJoin('p.Categories', 'c')
+      .select('c.name', 'category')
+      .addSelect('SUM(oi.quantity)', 'count')
+      .where('o.completed_at IS NOT NULL')
+      .andWhere('o.completed_at >= :start AND o.completed_at < :end', {
+        start: startDate,
+        end: endDate,
+      })
+      .groupBy('c.name')
+      .orderBy('count', 'DESC')
+      .getRawMany();
+
+    const salesByCategory = {};
+    categoryStatsRaw.forEach(row => {
+      salesByCategory[row.category] = parseInt(row.count, 10);
+    });
 
     res.status(200).json({
       "status": true,
       "data": {
         "summary": {
-          "revenue": 15231.89,  // 本月收入
-          // revenueGrowth,        // 與上月比收入成長
-          "bookSales": 2350,    // 本月書籍銷量
-          // bookSalesGrowth,      // 與上月比書籍銷售成長
-          "totalOrders": 573,   // 訂單數量
-          // orderGrowth,          // 與上月比訂單成長
-          currentMonth // 當前年月
+          currentYearMonth, // 當前年月
+          "revenue": currentMonthRevenue,  // 本月收入
+          "revenueGrowth": revenueGrowthRate === null ? '無法計算(無上月資料)' : revenueGrowthRate.toFixed(1)+"%",        // 與上月比收入成長
+          "bookSales": currentMonthBookSales,    // 本月書籍銷量
+          "bookSalesGrowth": bookSalesGrowthRate === null ? '無法計算(無上月資料)' : bookSalesGrowthRate.toFixed(1)+"%",      // 與上月比書籍銷售成長
+          "totalOrders": currentMonthOrderCount,   // 訂單數量
+          "orderGrowth": orderGrowthRate === null ? '無法計算(無上月資料)' : orderGrowthRate.toFixed(1)+"%",          // 與上月比訂單成長
         },
-        "monthlySales": {
-          "labels": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-          "revenue": [12500, 13200, 15800, 17000, 16500, 0, 0, 0, 0, 0, 0, 0],
-          "orders": [11500, 12000, 14200, 15000, 16000, 0, 0, 0, 0, 0, 0, 0]
-        },
-        "salesByCategory": {
-          "Healthy Living": 35,
-          "Scientific Knowledge": 25,
-          "Art Appreciation": 20,
-          "Music Appreciation": 15,
-          "Inspirational Growth": 5
-        }
+        monthlySales,
+        salesByCategory
       }
     });
   } catch (error) {
