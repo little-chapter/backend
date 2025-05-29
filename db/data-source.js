@@ -17,6 +17,7 @@ const DiscountCode = require("./entities/DiscountCodeSchema");
 const DiscountCodeUsage = require("./entities/DiscountCodeUsageSchema");
 const PendingOrder = require("./entities/PendingOrderSchema");
 const PendingOrderItem = require("./entities/PendingOrderItemSchema");
+const Notifications = require("./entities/NotificationsSchema");
 const Invoices = require("./entities/InvoicesSchema");
 
 const dataSource = new DataSource({
@@ -45,6 +46,7 @@ const dataSource = new DataSource({
     DiscountCodeUsage,
     PendingOrder,
     PendingOrderItem,
+    Notifications
     Invoices,
   ],
   ssl: config.get("db.ssl"),

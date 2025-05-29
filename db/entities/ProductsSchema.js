@@ -129,6 +129,6 @@ module.exports = new EntitySchema({
                 foreignKeyConstraintName: "products_categories_id_fk"
             },
             onDelete:"RESTRICT"
-        },
+        }
     }
 })
