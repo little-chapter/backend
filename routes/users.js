@@ -148,7 +148,7 @@ router.post("/log-in", async (req, res) => {
       });
     }
 
-    // 生成 JWT token，有效期為一天
+    // 生成 JWT token
     const token = jwt.sign(
       {
         id: user.id,
