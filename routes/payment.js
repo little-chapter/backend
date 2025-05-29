@@ -303,7 +303,27 @@ router.post("/notify", async(req, res, next) =>{
                 }
                 
             }else{
-                //開立發票錯誤
+                //紀錄開立發票錯誤????
+                await dataSource.getRepository("Invoices")
+                    .createQueryBuilder("invoices")
+                    .insert()
+                    .into()
+                    .values({
+                        order_id: officalOrder.id,
+                        merchant_order_no: invoiceResult.MerchantOrderNo,
+                        invoice_number: invoiceResult.InvoiceNumber,
+                        total_amount: parseInt(invoiceResult.TotalAmt),
+                        invoice_trans_no: invoiceResult.InvoiceTransNo,
+                        random_number: invoiceResult.RandomNum,
+                        barcode: invoiceResult.BarCode || null,
+                        qrcode_l: invoiceResult.QRcodeL || null,
+                        qrcode_r: invoiceResult.QRcodeR || null,
+                        check_code: invoiceResult.CheckCode,
+                        status: status.toLowerCase(),
+                        failed_message: ezpayReturn.Message,
+                        create_time: new Date(invoiceResult.CreateTime).toISOString()
+                    })
+                    .execute();
                 logger.warn(`開立發票錯誤${data.Status}:${data.Message}`)
                 console.log(`開立發票錯誤${data.Status}:${data.Message}`)
             }
