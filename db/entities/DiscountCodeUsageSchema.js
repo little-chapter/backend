@@ -28,7 +28,7 @@ module.exports = new EntitySchema({
             nullable: false,
         },
         used_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         }

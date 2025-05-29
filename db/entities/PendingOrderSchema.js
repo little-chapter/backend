@@ -72,6 +72,11 @@ module.exports = new EntitySchema({
             length: 20,
             nullable: false,
         },
+        carrier_number: {
+            type: "varchar",
+            length: 10,
+            nullable: true,
+        },
         shipping_method: {
             type: "varchar",
             length: 50,
@@ -106,12 +111,12 @@ module.exports = new EntitySchema({
             nullable: true,
         },
         created_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
         expired_at: {
-            type: "timestamp",
+            type: "timestamptz",
             nullable: false,
         },
     },
