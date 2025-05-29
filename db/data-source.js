@@ -46,7 +46,7 @@ const dataSource = new DataSource({
     DiscountCodeUsage,
     PendingOrder,
     PendingOrderItem,
-    Notifications
+    Notifications,
     Invoices,
   ],
   ssl: config.get("db.ssl"),
