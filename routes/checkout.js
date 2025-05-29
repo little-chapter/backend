@@ -128,12 +128,12 @@ router.post("/", verifyToken, async(req, res, next)=>{
             const now = new Date().toISOString();
             const existCode = await dataSource.getRepository("DiscountCodes")
                 .createQueryBuilder("discountCodes")
-                .where("discountCodes.code =:code", {code: discountCode})
+                .where("discountCodes.id =:codeId", {codeId: discountCode})
                 .andWhere("discountCodes.start_date <=:startDate", {startDate: now})
                 .andWhere("discountCodes.end_date >:endDate", {endDate: now})
                 .andWhere("discountCodes.is_active =:isActive", {isActive: true})
                 .getOne();
-            if(!existCode || existCode.min_purchase > totalAmount || (existCode.usage_limit && existCode.usage_limit === 0)){
+            if(!existCode || existCode.min_purchase > totalAmount){
                 logger.warn("折扣碼無效");
                 res.status(400).json({
                     "status": false,
@@ -238,7 +238,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                     shipping_address: shippingAddress,
                     payment_method: paymentMethod,
                     note: note,
-                    discount_code: discountCode,
+                    discount_code: existCode.id,
                     expired_at: addOneDayToUtc(nowUTCStr),
                 })
                 .execute();

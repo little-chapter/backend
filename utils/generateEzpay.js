@@ -5,21 +5,21 @@ const {
     EZPAY_HASH_IV,
     EZPAY_VERSION,
 } = process.env;
-function generateEzpay(orderData, orderItems){
+function generateEzpay(order, orderItems){
     const unit = "本";
     const taxRate = 5;
     const delivery = {
         title: "運費",
         quantity: 1,
-        price: orderData.shipping_amount,
-        subtotal: orderData.shipping_amount,
+        price: order.shipping_amount,
+        subtotal: order.shipping_amount,
         unit: "筆",
     }
     const discount = {
         title: "折扣碼折扣",
-        price: orderData.discount_price ? `-${orderData.discount_price}` : 0,
-        quantity: orderData.discount_price ? 1 : 0,
-        subtotal: orderData.discount_price ? `-${orderData.discount_price * 1}` : 0,
+        price: order.discount_price ? `-${order.discount_price}` : 0,
+        quantity: order.discount_price ? 1 : 0,
+        subtotal: order.discount_price ? `-${order.discount_price * 1}` : 0,
         unit: "張"
     }
     orderItems.push(delivery, discount);
@@ -32,19 +32,19 @@ function generateEzpay(orderData, orderItems){
         respondType: "JSON",
         version: EZPAY_VERSION,
         timeStamp: Math.floor(Date.now() / 1000),
-        merchantOrderNo: orderData.order_number,
+        merchantOrderNo: order.order_number,
         status: "1",
         category: "B2C",
-        buyerName: orderData.username ? orderData.username : orderData.email,
-        buyerEmail: orderData.email,
-        carrierType: orderData.invoice_type = "e-invoice" ? "0" : "",
-        carrierNum: orderData.carrier_number ? orderData.carrier_number : "",
-        printFlag: orderData.invoice_type = "paper" ? "Y" : "N",
+        buyerName: order.username ? order.username : order.email,
+        buyerEmail: order.email,
+        carrierType: order.invoice_type = "e-invoice" ? "0" : "",
+        carrierNum: order.carrier_number ? order.carrier_number : "",
+        printFlag: order.invoice_type = "paper" ? "Y" : "N",
         taxType: "1",
         taxRate: taxRate,
-        amt: Math.round(orderData.final_amount * (1 - taxRate / 100)),
-        taxAmt: orderData.final_amount - Math.round(orderData.final_amount * (1 - taxRate / 100)),
-        totalAmt: parseInt(orderData.final_amount),
+        amt: Math.round(order.final_amount * (1 - taxRate / 100)),
+        taxAmt: order.final_amount - Math.round(order.final_amount * (1 - taxRate / 100)),
+        totalAmt: parseInt(order.final_amount),
         itemName: itemName,
         itemCount: itemCount,
         itemUnit: itemUnit,
