@@ -12,7 +12,8 @@ module.exports = new EntitySchema({
         },
         order_id: {
             type: "uuid",
-            nullable: false,
+            nullable: true,
+            unique: true
         },
         merchant_order_no: {
             type: "varchar",
@@ -96,13 +97,14 @@ module.exports = new EntitySchema({
             length: 4,
             nullable: true,
         },
-        return_code: {
+        respond_code: {
             type: "varchar",
             length: 20,
             nullable: true,
         },
-        return_message: {
-            type: "text",
+        failed_message: {
+            type: "varchar",
+            length: 100,
             nullable: true,
         },
         raw_response: {
@@ -128,7 +130,7 @@ module.exports = new EntitySchema({
             joinColumn: {
                 name: "order_id",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "paymentTransactions_orders_id_fk"
+                foreignKeyConstraintName: "paymentTransactions_order_id_fk"
             },
             onDelete:"RESTRICT"
         },

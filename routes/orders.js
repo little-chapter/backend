@@ -112,7 +112,10 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
             })
             return
         }
-        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({
+            user_id: id,
+            order_number: orderNumber
+        });
         if(!existOrder){
             res.status(404).json({
                 status: true,
