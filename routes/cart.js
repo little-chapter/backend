@@ -69,7 +69,7 @@ router.post("/", verifyToken, async(req, res, next)=> {
 
         // 提取使用者輸入的資料
         const {
-            "product_id": productId,
+            productId,
             quantity = 1                // 若使用者沒有輸入這行，則商品數量 quantity 預設為 1
         } = req.body;
 
