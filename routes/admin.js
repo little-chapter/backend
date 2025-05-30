@@ -211,7 +211,7 @@ router.get("/task", verifyToken, verifyAdmin, async(req, res, next)=>{
         "data": {
           "pendingTasks": {
             "pendingShipments": countShip,
-            "pendingRefunds": countReturn,
+            "pendingReturns": countReturn,
           }
         }
     });
@@ -467,9 +467,8 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async(req, res, nex
     && findProduct.is_new_arrival === (isNewArrival ? toBoolean(isNewArrival) : findProduct.is_new_arrival)
     && findProduct.is_bestseller === (isBestseller ? toBoolean(isBestseller) : findProduct.is_bestseller)
     && findProduct.is_discount === (isDiscount ? toBoolean(isDiscount) : findProduct.is_discount)){
-      res.status(400).json({
-        "status": false,
-        "message": "您輸入的商品資訊未變更"
+      res.status(200).json({
+        "message": "您輸入的商品資訊未變更，無需更新"
       });
       return;
     }
