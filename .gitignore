@@ -54,6 +54,8 @@ lerna-debug.log*
 *.pem
 *.key
 *.crt
+secrets/
+**/*.json
 
 # 擴展檔案
 *.tgz
