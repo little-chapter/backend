@@ -52,13 +52,13 @@ router.get("/dashboard", verifyToken, verifyAdmin, async(req, res, next)=>{
     const prevYearMonth = `${prevYear}年${prevMonth}月`;
     
     // 利用 payment_time 作為交易時間，計算本月及上月成功付款的營收總和
-    // 狀態選擇 'success' (請依實際資料調整)
+    // 狀態選擇 'SUCCESS' (請依實際資料調整)
     const getMonthRevenue = async (year, month) => {
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 1);
         const result = await paymentRepo.createQueryBuilder('pt')
             .select('COALESCE(SUM(pt.amount), 0)', 'total')
-            .where('pt.status = :status', { status: 'success' })
+            .where('pt.status = :status', { status: 'SUCCESS' })
             .andWhere('pt.payment_time >= :startDate AND pt.payment_time < :endDate', { startDate, endDate })
             .getRawOne();
 // console.log("result:", result);
@@ -128,10 +128,10 @@ router.get("/dashboard", verifyToken, verifyAdmin, async(req, res, next)=>{
       const startDate = new Date(currentYear, month - 1, 1);
       const endDate = new Date(currentYear, month, 1);
 
-      // 營收統計（使用 payment_time 與 status = 'success'）
+      // 營收統計（使用 payment_time 與 status = 'SUCCESS'）
       const revenueResult = await paymentRepo.createQueryBuilder('pt')
         .select('COALESCE(SUM(pt.amount), 0)', 'total')
-        .where('pt.status = :status', { status: 'success' })
+        .where('pt.status = :status', { status: 'SUCCESS' })
         .andWhere('pt.payment_time >= :startDate AND pt.payment_time < :endDate', { startDate, endDate })
         .getRawOne();
       monthlyRevenue[month - 1] = parseFloat(revenueResult.total);
