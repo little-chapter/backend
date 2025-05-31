@@ -106,7 +106,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
             .createQueryBuilder("user")
             .where("user.id =:userId", {userId: id});
         if(!existUser){
-            logger.warn("此用戶不存在");
             res.status(404).json({
                 "status": false,
                 "message": "此用戶不存在"
@@ -117,7 +116,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
         if(discountCode){
             discountCode = String(discountCode).toUpperCase();
             if(isNotValidString(discountCode)){
-                logger.warn("欄位資料格式不符");
                 res.status(400).json({
                     "status": false,
                     "message": "欄位資料格式不符"
@@ -128,13 +126,12 @@ router.post("/", verifyToken, async(req, res, next)=>{
             const now = new Date().toISOString();
             const existCode = await dataSource.getRepository("DiscountCodes")
                 .createQueryBuilder("discountCodes")
-                .where("discountCodes.id =:codeId", {codeId: discountCode})
+                .where("discountCodes.code =:code", {code: discountCode})
                 .andWhere("discountCodes.start_date <=:startDate", {startDate: now})
                 .andWhere("discountCodes.end_date >:endDate", {endDate: now})
                 .andWhere("discountCodes.is_active =:isActive", {isActive: true})
                 .getOne();
             if(!existCode || existCode.min_purchase > totalAmount){
-                logger.warn("折扣碼無效");
                 res.status(400).json({
                     "status": false,
                     "message": "折扣碼無效"
@@ -148,7 +145,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 .andWhere("codeUsages.user_id =:userId", {userId: id})
                 .getOne();
             if(existUsage){
-                logger.warn("已使用過此折扣碼");
                 res.status(409).json({
                     "status": false,
                     "message": "已使用過此折扣碼"
@@ -176,7 +172,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
             return !productIds.includes(itemId)
         })
         if(missingIds.length !== 0){
-            logger.warn("部分商品不存在");
             res.status(404).json({
                 "status": false,
                 "message": "部分商品不存在"
@@ -204,7 +199,6 @@ router.post("/", verifyToken, async(req, res, next)=>{
                     availableQuantity: item.stock
                 }
             })
-            logger.warn("部分商品庫存不足");
             res.status(409).json({
                 "status": false,
                 "message": "部分商品庫存不足",
@@ -215,6 +209,11 @@ router.post("/", verifyToken, async(req, res, next)=>{
         const nowUTCStr = new Date().toISOString();
         const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0"); //隨機三碼
         const orderNumber = `ORD${Math.floor(Date.now()/1000)}${randomThreeDigits}`; //建立訂單編號
+        const code = await dataSource.getRepository("DiscountCodes")
+            .createQueryBuilder("discountCodes")
+            .select(["discountCodes.id AS id"])
+            .where("discountCodes.code =:code", {code: discountCode})
+            .getRawOne();
         await dataSource.transaction(async (transactionalEntityManager) => {
             //暫存訂單
             const pendingOrder = await transactionalEntityManager
@@ -238,7 +237,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
                     shipping_address: shippingAddress,
                     payment_method: paymentMethod,
                     note: note,
-                    discount_code: existCode.id,
+                    discount_code: code ? code.id : null,
                     expired_at: addOneDayToUtc(nowUTCStr),
                 })
                 .execute();
