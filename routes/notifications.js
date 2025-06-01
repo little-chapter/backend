@@ -4,7 +4,7 @@ const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Notifications');
 const { verifyToken } = require("../middlewares/auth");
 const {isNotValidString, isNotValidInteger} = require("../utils/validUtils")
-const { isBoolean } = require("validator");
+const { isBoolean, isUUID } = require("validator");
 
 //取得所有通知
 router.get("/", verifyToken, async(req, res, next) =>{
@@ -113,6 +113,61 @@ router.get("/", verifyToken, async(req, res, next) =>{
     }
 })
 //標記所有通知為已讀
-router.put("/markAllRead", verifyToken, (req, res, next) =>{})
+router.put("/markAllRead", verifyToken, async(req, res, next) =>{
+    try{
+        const {id} = req.user;
+        let {confirm} = req.body;
+        if(!id || !isUUID(id) || !confirm || typeof confirm !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return
+        }
+        if(confirm !== true){
+            res.status(400).json({
+                status: false,
+                message: "未確認執行全部已讀",
+            });
+            return
+        }
+        const existUser = await dataSource.getRepository("User")
+            .createQueryBuilder("user")
+            .where("user.id =:userId", {userId: id})
+            .getExists();
+        if(!existUser){
+            res.status(404).json({
+                status: false,
+                message: "找不到此用戶",
+            });
+            return
+        }
+        const updatedNotifications = await dataSource.getRepository("Notifications")
+            .createQueryBuilder("notifications")
+            .update()
+            .set({
+                is_read: true
+            })
+            .where("notifications.is_read =:isRead", {isRead: false})
+            .andWhere("notifications.is_deleted =:isDeleted", {isDeleted: false})
+            .andWhere("notifications.user_id =:userId", {userId: id})
+            .execute();
+        if(updatedNotifications.affected === 0){
+            res.status(200).json({
+                status: true,
+                message: "沒有未讀通知",
+            });
+            return
+        }
+        res.status(200).json({
+            status: true,
+            message: "已將全部通知標記為已讀",
+            updatedCount: updatedNotifications.affected
+        })
+    }catch(error){
+        logger.error('已讀所有通知錯誤:', error);
+        next(error);
+    }
+})
 
 module.exports = router;
