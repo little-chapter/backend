@@ -45,6 +45,13 @@ router.get("/", verifyToken, async(req, res, next) =>{
                 }
             }
         }
+        if(!id || !isUUID(id)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return
+        }
         const existUser = await dataSource.getRepository("User")
             .createQueryBuilder("user")
             .where("user.id =:userId", {userId: id})
