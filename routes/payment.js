@@ -180,25 +180,24 @@ router.post("/notify", async(req, res, next) =>{
                     .from("PendingOrderItems")
                     .where("pending_order_id =:pendingOrderId", {pendingOrderId: pendingOrderId})
                     .execute();
-                //將PendingOrderItems批次更新商品庫存(Products)並確認庫存，庫存為0就下架(is_visible=false)
+                //更新商品庫存
                 for(const item of pendingOrderItems){
                     await transactionalEntityManager
                         .createQueryBuilder()
                         .update("Products")
                         .set({
                             stock_quantity: ()=> `GREATEST(stock_quantity - ${item.quantity}, 0)`,
-                            is_visible: ()=>`
-                                CASE
-                                    WHEN GREATEST(stock_quantity - ${item.quantity}, 0) = 0
-                                    THEN false
-                                    ELSE is_visible
-                                END
-                            `,
                             updated_at: new Date().toISOString()
                         })
                         .where("Products.id =:productId", {productId: item.product_id})
                         .execute();
-                    //發送通知給所有admin該商品庫存不足已下架?
+                    //確認庫存
+                    const productStock = await transactionalEntityManager
+                        .createQueryBuilder("Products")
+                        .select(["Products.stock_quantity AS stock_quantity"])
+                        .where("Products.id =:productId", {productId: item.product_id})
+                        .getRawOne();
+                    //通知管理者商品庫存不足
                 }
                 //更新折扣碼使用次數
                 if(pendingOrder.discount_code){
@@ -271,7 +270,7 @@ router.post("/notify", async(req, res, next) =>{
             const status = ezpayReturn.Status;
             if(status === "SUCCESS"){ //成功開立 或重複開立
                 const invoiceResult = JSON.parse(ezpayReturn.Result);
-                const existInvoice = await dataSource.getRepository("Invoices").findOneBy({merchant_order_no: invoiceResult.MerchantOrderNo})
+                const existInvoice = await dataSource.getRepository("Invoices").findOneBy({merchant_order_no: invoiceResult.MerchantOrderNo, status: "SUCCESS"})
                 if(existInvoice){
                     console.log(`訂單編號${invoiceResult.MerchantOrderNo}已開立過發票`)
                 }else{
@@ -290,7 +289,7 @@ router.post("/notify", async(req, res, next) =>{
                             qrcode_l: invoiceResult.QRcodeL || null,
                             qrcode_r: invoiceResult.QRcodeR || null,
                             check_code: invoiceResult.CheckCode,
-                            status: status.toLowerCase(),
+                            status: status,
                             create_time: new Date(invoiceResult.CreateTime).toISOString()
                         })
                         .execute();
@@ -303,29 +302,22 @@ router.post("/notify", async(req, res, next) =>{
                 }
                 
             }else{
-                //紀錄開立發票錯誤????
+                //紀錄開立發票錯誤
                 await dataSource.getRepository("Invoices")
                     .createQueryBuilder("invoices")
                     .insert()
                     .into()
                     .values({
                         order_id: officalOrder.id,
-                        merchant_order_no: invoiceResult.MerchantOrderNo,
-                        invoice_number: invoiceResult.InvoiceNumber,
-                        total_amount: parseInt(invoiceResult.TotalAmt),
-                        invoice_trans_no: invoiceResult.InvoiceTransNo,
-                        random_number: invoiceResult.RandomNum,
-                        barcode: invoiceResult.BarCode || null,
-                        qrcode_l: invoiceResult.QRcodeL || null,
-                        qrcode_r: invoiceResult.QRcodeR || null,
-                        check_code: invoiceResult.CheckCode,
-                        status: status.toLowerCase(),
+                        merchant_order_no: officalOrder.order_number,
+                        total_amount: parseInt(officalOrder.final_amount),
+                        status: status,
                         failed_message: ezpayReturn.Message,
-                        create_time: new Date(invoiceResult.CreateTime).toISOString()
+                        create_time: new Date().toISOString()
                     })
                     .execute();
-                logger.warn(`開立發票錯誤${data.Status}:${data.Message}`)
-                console.log(`開立發票錯誤${data.Status}:${data.Message}`)
+                logger.warn(`開立訂單${officalOrder.order_number}發票錯誤${status}:${ezpayReturn.Message}`)
+                console.log(`開立訂單${officalOrder.order_number}發票錯誤${status}:${ezpayReturn.Message}`)
             }
             //寄送訂單成立信件
             const orderStatusList = {
