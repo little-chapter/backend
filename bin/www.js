@@ -8,6 +8,8 @@ const config = require('../config/index')
 const app = require('../app') // 導入 app.js
 const logger = require('../utils/logger')('www')
 const { dataSource } = require('../db/data-source')
+const cron = require('node-cron')
+const { cleanExpiredPendingOrders } = require('../utils/cleanExpiredPendingOrders')
 
 const port = config.get('web.port')
 
@@ -44,6 +46,12 @@ server.listen(port, async () => {
     await dataSource.initialize()
     logger.info('資料庫連線成功')
     logger.info(`伺服器運作中. port: ${port}`)
+    await cleanExpiredPendingOrders()
+    //排程每天0點0分0秒清除過期暫存訂單
+    cron.schedule('0 0 0 * * *', async ()=>{
+      logger.info('執行排程任務 : 清除過期暫存訂單')
+      await cleanExpiredPendingOrders();
+    })
   } catch (error) {
     logger.error(`資料庫連線失敗: ${error.message}`)
     process.exit(1)
