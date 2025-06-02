@@ -1,4 +1,4 @@
-const { encryptAES } = require("./encryptUtils");
+const { encryptAES, sha256 } = require("./encryptUtils");
 const { 
     NEWEPAY_MERCHANTID,
     NEWEPAY_HASHKEY, 

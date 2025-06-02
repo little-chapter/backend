@@ -12,19 +12,17 @@ module.exports = new EntitySchema({
         },
         order_id:{
             type: "uuid",
-            nullable: true,
-            unique: true
+            nullable: false,
         },
         merchant_order_no: {
             type: "varchar",
             length: 30,
             nullable: false,
-            unique: true
         },
         invoice_number: {
             type: "varchar",
             length: 10,
-            nullable: false,
+            nullable: true,
             unique: true
         },
         total_amount:{
@@ -36,12 +34,12 @@ module.exports = new EntitySchema({
         invoice_trans_no: {
             type: "varchar",
             length: 20,
-            nullable: false,
+            nullable: true,
         },
         random_number: {
             type: "varchar",
             length: 4,
-            nullable: false,
+            nullable: true,
         },
         barcode: {
             type: "varchar",
@@ -61,7 +59,7 @@ module.exports = new EntitySchema({
         check_code: {
             type: "varchar",
             length: 64,
-            nullable: false,
+            nullable: true,
         },
         status: {
             type: "varchar",
@@ -81,7 +79,7 @@ module.exports = new EntitySchema({
     relations: {
         Orders: {
             target: "Orders",
-            type: "one-to-one",
+            type: "many-to-one",
             joinColumn: {
                 name: "order_id",
                 referencedColumnName: "id",
