@@ -75,32 +75,6 @@ router.post("/notify", async(req, res, next) =>{
                 .execute();
         }else{
             const now = new Date().toISOString();
-            
-            //建立交易資料
-            await dataSource.getRepository("PaymentTransactions")
-                .createQueryBuilder()
-                .insert()
-                .values({
-                    merchant_order_no: orderNumber,
-                    transaction_number: result.TradeNo,
-                    payment_type: result.PaymentType,
-                    amount: result.Amt,
-                    status: decrypted.Status,
-                    payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10)).toISOString(),
-                    bank_code: result.PayBankCode || null,
-                    payer_account5code: result.PayerAccount5Code || null,
-                    account_number: result.AccountNumber || null,
-                    barcode_1: result.Barcode_1 || null,
-                    barcode_2: result.Barcode_2 || null,
-                    barcode_3: result.Barcode_3 || null,
-                    auth_code: result.Auth || null,
-                    card_start6: result.Card6No || null,
-                    card_last4: result.Card4No || null,
-                    respond_code: result.RespondCode || null,
-                    raw_response: JSON.stringify(decrypted)
-                })
-                .execute();
-            //確認orderNumber存在於PendingOrders且訂單編號及總金額皆正確
             const pendingOrder = await dataSource.getRepository("PendingOrders")
                 .createQueryBuilder("pendingOrders")
                 .where("pendingOrders.order_number :=orderNumber", {orderNumber: orderNumber})
@@ -160,6 +134,32 @@ router.post("/notify", async(req, res, next) =>{
                         })
                         .execute();
                 }
+                //建立交易資料
+                await transactionalEntityManager
+                    .createQueryBuilder()
+                    .insert()
+                    .into("PaymentTransactions")
+                    .values({
+                        order_id: newOrderId,
+                        merchant_order_no: orderNumber,
+                        transaction_number: result.TradeNo,
+                        payment_type: result.PaymentType,
+                        amount: result.Amt,
+                        status: decrypted.Status,
+                        payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10)).toISOString(),
+                        bank_code: result.PayBankCode || null,
+                        payer_account5code: result.PayerAccount5Code || null,
+                        account_number: result.AccountNumber || null,
+                        barcode_1: result.Barcode_1 || null,
+                        barcode_2: result.Barcode_2 || null,
+                        barcode_3: result.Barcode_3 || null,
+                        auth_code: result.Auth || null,
+                        card_start6: result.Card6No || null,
+                        card_last4: result.Card4No || null,
+                        respond_code: result.RespondCode || null,
+                        raw_response: JSON.stringify(decrypted)
+                    })
+                    .execute();
                 //刪除userId的所有購物車項目(CartItems)
                 await transactionalEntityManager
                     .createQueryBuilder()
