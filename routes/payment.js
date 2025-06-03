@@ -19,11 +19,26 @@ router.post("/return", async(req, res, next) =>{
         const raw = req.body.TradeInfo;
         const decrypted = decryptAES(raw, NEWEPAY_HASHKEY, NEWEPAY_HASHIV);
         const result = decrypted.Result;
+        let targetUrl;
         if(decrypted.Status === "SUCCESS"){
-            res.redirect(`${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/success?orderNum=${result.MerchantOrderNo}?serialNum=${result.TradeNo}?price=${result.Amt}?type=${result.PaymentType}`);
+            targetUrl = `${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/success?orderNum=${result.MerchantOrderNo}&serialNum=${result.TradeNo}&price=${result.Amt}&type=${result.PaymentType}`;
         }else{
-            res.redirect(`${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/fail?orderNum=${result.MerchantOrderNo}?serialNum=${result.TradeNo}?price=${result.Amt}?type=${result.PaymentType}`);
+            targetUrl = `${FRONTEND_URL}/cart/result/${result.MerchantOrderNo}/fail?orderNum=${result.MerchantOrderNo}&serialNum=${result.TradeNo}&price=${result.Amt}&type=${result.PaymentType}`;
         }
+        res.send(`
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>跳轉中...</title>
+                </head>
+                <body>
+                    <script>
+                        window.location.replace("${targetUrl}");
+                    </script>
+                    <p>付款結果已確認，正在導回結果頁...</p>
+                </body>
+            </html>
+        `);
     }catch(error){
         logger.error('金流前台回傳錯誤:', error);
         next(error);
