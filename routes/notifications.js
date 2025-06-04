@@ -124,9 +124,7 @@ router.put("/markAllRead", verifyToken, async(req, res, next) =>{
     try{
         const {id} = req.user;
         let {confirm} = req.body;
-        console.log(typeof confirm === "boolean", confirm === false)
         if(!id || !isUUID(id) || typeof confirm !== "boolean"){
-            console.log(!id, !isUUID(id), typeof confirm !== "boolean")
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
