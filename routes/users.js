@@ -122,6 +122,7 @@ router.post("/log-in", async (req, res) => {
         "is_active",
         "is_admin",
         "name",
+        "avatar",
       ],
     });
     if (!user) {
@@ -170,6 +171,7 @@ router.post("/log-in", async (req, res) => {
           name: user.name || "",
           email: user.email,
           role: user.role,
+          avatar: user.avatar || "",
         },
         token: token,
         expiresIn: 2592000,
