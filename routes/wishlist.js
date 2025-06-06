@@ -31,9 +31,9 @@ router.get("/", verifyToken, async (req, res, next) => {
             return {
                 "productId": product.id,
                 "title": product.title,
-                "cover_image": product.cover_image?.image_url || null, // 取得 product.cover_image.image_url，如果拿不到，就回傳 null
+                "coverImage": product.cover_image?.image_url || null, // 取得 product.cover_image.image_url，如果拿不到，就回傳 null
                 "price": parseFloat(product.price),
-                "discount_price": product.discount_price ? parseFloat(product.discount_price) : null,
+                "discountPrice": product.discount_price ? parseFloat(product.discount_price) : null,
                 "quantity": 1,
                 "stockQuantity": product.stock_quantity
             };
@@ -103,7 +103,6 @@ router.post("/", verifyToken, async (req, res, next) => {
         res.status(201).json({
             "status": true,
             "message": "成功加入願望清單",
-            "data": "null"
         });
     } catch (error) {
         logger.error("加入願望商品失敗: ", error);

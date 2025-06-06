@@ -13,6 +13,7 @@ const {
 const { generateVerificationCode } = require("../utils/codeGenerator");
 const { verifyToken } = require("../middlewares/auth");
 const { isValidEmail, isNotValidString } = require("../utils/validUtils");
+const { google } = require("googleapis");
 
 // 用戶註冊
 router.post("/sign-up", async (req, res) => {
@@ -152,7 +153,7 @@ router.post("/log-in", async (req, res) => {
       });
     }
 
-    // 生成 JWT token，有效期為一天
+    // 生成 JWT token
     const token = jwt.sign(
       {
         id: user.id,
@@ -745,6 +746,7 @@ router.put("/password", verifyToken, async (req, res) => {
   }
 });
 
+
 // /請求更新 Email
 router.post("/email-change", verifyToken, async (req, res, next) => {
   try {
@@ -877,6 +879,141 @@ router.post("/email-change/verify", verifyToken, async (req, res, next) => {
   } catch (error) {
     logger.error("驗證新 Email 失敗: ", error);
     next(error);
+
+// Google 第三方登入
+router.post("/google-sign-in", async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    // 驗證必要參數
+    if (!idToken || typeof idToken !== "string") {
+      return res.status(400).json({
+        status: false,
+        message: "缺少必要參數",
+      });
+    }
+
+    // 創建 OAuth2 客戶端並驗證 ID Token
+    const client = new google.auth.OAuth2(
+      process.env.GOOGLE_AUTH_CLIENTID,
+      process.env.GOOGLE_AUTH_CLIENT_SECRET
+    );
+
+    let payload;
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: idToken,
+        audience: process.env.GOOGLE_AUTH_CLIENTID,
+      });
+      payload = ticket.getPayload();
+    } catch (error) {
+      console.error("Google ID Token verification failed:", error);
+      return res.status(400).json({
+        status: false,
+        message: "Google ID Token 無效或已過期",
+      });
+    }
+
+    // 從 Google 取得用戶資訊
+    const email = payload.email;
+    const name = payload.name;
+    const avatar = payload.picture;
+
+    if (!email) {
+      return res.status(400).json({
+        status: false,
+        message: "無法從 Google 獲取用戶資訊",
+      });
+    }
+
+    const userRepository = dataSource.getRepository("User");
+
+    // 檢查用戶是否已存在
+    let user = await userRepository.findOne({
+      where: { email },
+      select: [
+        "id",
+        "email",
+        "name",
+        "role",
+        "is_active",
+        "is_admin",
+        "avatar",
+      ],
+    });
+
+    let isNewUser = false;
+
+    if (!user) {
+      // 用戶不存在，創建新用戶
+      const randomPassword = Math.random().toString(36).slice(-12);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      const newUser = userRepository.create({
+        email,
+        name: name || "",
+        avatar: avatar || "",
+        password: hashedPassword, // Google 用戶使用隨機密碼
+        role: "customer",
+        is_active: true, // Google 用戶預設為已驗證
+        is_admin: false,
+      });
+
+      user = await userRepository.save(newUser);
+      isNewUser = true;
+    } else {
+      // 檢查帳戶是否被停用
+      if (!user.is_active) {
+        return res.status(403).json({
+          status: false,
+          message: "該 Google 帳號已被停用",
+        });
+      }
+
+      // 更新用戶頭像（如果 Google 頭像有更新）
+      if (avatar && user.avatar !== avatar) {
+        user.avatar = avatar;
+        await userRepository.save(user);
+      }
+    }
+
+    // 生成 JWT token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        is_admin: user.is_admin,
+      },
+      jwtSecret,
+      { expiresIn: process.env.JWT_EXPIRES_DAY || "30d" }
+    );
+
+    // 回傳登入成功訊息與使用者資訊
+    const statusCode = isNewUser ? 201 : 200;
+    const message = isNewUser ? "Google 註冊並登入成功" : "Google 登入成功";
+
+    res.status(statusCode).json({
+      status: true,
+      message: message,
+      data: {
+        user: {
+          id: user.id,
+          name: user.name || "",
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar || "",
+        },
+        token: token,
+        expiresIn: 2592000,
+      },
+    });
+  } catch (error) {
+    console.error("Error during Google sign-in:", error);
+    res.status(500).json({
+      status: false,
+      message: "伺服器錯誤，請稍後再試",
+    });
   }
 });
 
