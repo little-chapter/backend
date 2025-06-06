@@ -13,6 +13,8 @@ const checkoutRouter = require("./routes/checkout");
 const paymentRouter = require("./routes/payment");
 const uploadAvatarRouter = require("./routes/uploadAvatar");
 const uploadProductRouter = require("./routes/uploadProduct");
+const notificationRouter = require("./routes/notifications");
+const discountCodeRouter = require("./routes/discountCodes");
 
 const app = express();
 app.use(cors());
@@ -46,6 +48,8 @@ app.use("/api/checkout", checkoutRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/upload/avatar", uploadAvatarRouter);
 app.use("/api/admin/products", uploadProductRouter);
+app.use("/api/notifications", notificationRouter);
+app.use("/api/discountCodes", discountCodeRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({
