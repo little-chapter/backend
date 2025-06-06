@@ -165,6 +165,63 @@ const sendPasswordResetEmail = async (to, code) => {
 };
 
 /**
+ * 發送更新電子郵件驗證信
+ * @param {string} to 收件人
+ * @param {string} code 驗證碼
+ * @returns {Promise<boolean>} 是否發送成功
+ */
+const sendVerificationNewEmail = async (to, code) => {
+  try {
+    const transporter = await createTransporter();
+
+    const mailOptions = {
+      from: {
+        name: "Little Chapter",
+        address: process.env.EMAIL_USER,
+      },
+      to,
+      subject: "Little Chapter - 重設會員電子信箱 E-mail 驗證碼",
+      html: `
+        <!DOCTYPE html>
+        <html lang="zh-TW">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>電子郵件驗證</title>
+        </head>
+        <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="border: 1px solid #e9e9e9; border-radius: 5px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #4a4a4a; margin-top: 0;">驗證您的電子郵件地址</h2>
+            </div>
+            <p>親愛的用戶，您好：</p>
+            <p>歡迎您加入 Little Chapter 繪本平台，並驗證會員電子信箱，您的驗證碼為：</p>
+            <div style="background-color: #f8f8f8; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0; font-size: 22px; font-family: monospace; letter-spacing: 2px; font-weight: bold;">
+              ${code}
+            </div>
+            <p>請在30分鐘內，依頁面提示提交驗證碼，切勿將驗證碼洩露他人。</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+            <p style="font-size: 12px; color: #777; text-align: center;">
+              此為系統自動發送的郵件，請勿直接回覆。<br>
+              © ${new Date().getFullYear()} Little Chapter 繪本平台. 保留所有權利。
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error) {
+    logger.error(`發送驗證郵件錯誤: ${error.message}`);
+    return false;
+  }
+};
+
+
+
+/**
  * 發送訂單成立信
  * @param {string} to 收件人
  * @param {object} order 訂單資訊
@@ -333,4 +390,5 @@ module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendOrderConfirmationEmail,
+  sendVerificationNewEmail
 };
