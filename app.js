@@ -14,6 +14,8 @@ const paymentRouter = require("./routes/payment");
 const uploadAvatarRouter = require("./routes/uploadAvatar");
 const uploadProductRouter = require("./routes/uploadProduct");
 const wishlistRouter = require("./routes/wishlist");
+const notificationRouter = require("./routes/notifications");
+const discountCodeRouter = require("./routes/discountCodes");
 
 const app = express();
 app.use(cors());
@@ -22,12 +24,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(
   pinoHttp({
     logger,
-    serializers: {
-      req(req) {
-        req.body = req.raw.body;
-        return req;
-      },
-    },
   })
 );
 
@@ -48,6 +44,8 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/upload/avatar", uploadAvatarRouter);
 app.use("/api/admin/products", uploadProductRouter);
 app.use("/api/wishlist", wishlistRouter);
+app.use("/api/notifications", notificationRouter);
+app.use("/api/discountCodes", discountCodeRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({
