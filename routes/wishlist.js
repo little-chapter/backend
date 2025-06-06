@@ -30,11 +30,12 @@ router.get("/", verifyToken, async (req, res, next) => {
             const product = item.Products;
             return {
                 "productId": product.id,
-                "cover_image": product.cover_image?.image_url || null, // 取得 product.cover_image.image_url，如果拿不到，就回傳 null
                 "title": product.title,
+                "cover_image": product.cover_image?.image_url || null, // 取得 product.cover_image.image_url，如果拿不到，就回傳 null
                 "price": parseFloat(product.price),
                 "discount_price": product.discount_price ? parseFloat(product.discount_price) : null,
-                "is_discount": product.is_discount,
+                "quantity": 1,
+                "stockQuantity": product.stock_quantity
             };
         });
         res.status(200).json({
