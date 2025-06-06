@@ -19,6 +19,7 @@ const PendingOrder = require("./entities/PendingOrderSchema");
 const PendingOrderItem = require("./entities/PendingOrderItemSchema");
 const Notifications = require("./entities/NotificationsSchema");
 const Invoices = require("./entities/InvoicesSchema");
+const Wishlists = require("./entities/WishlistsSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -48,6 +49,7 @@ const dataSource = new DataSource({
     PendingOrderItem,
     Notifications,
     Invoices,
+    Wishlists,
   ],
   ssl: config.get("db.ssl"),
 });

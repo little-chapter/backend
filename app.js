@@ -13,6 +13,7 @@ const checkoutRouter = require("./routes/checkout");
 const paymentRouter = require("./routes/payment");
 const uploadAvatarRouter = require("./routes/uploadAvatar");
 const uploadProductRouter = require("./routes/uploadProduct");
+const wishlistRouter = require("./routes/wishlist");
 const notificationRouter = require("./routes/notifications");
 const discountCodeRouter = require("./routes/discountCodes");
 
@@ -42,6 +43,7 @@ app.use("/api/checkout", checkoutRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/upload/avatar", uploadAvatarRouter);
 app.use("/api/admin/products", uploadProductRouter);
+app.use("/api/wishlist", wishlistRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/discountCodes", discountCodeRouter);
 
