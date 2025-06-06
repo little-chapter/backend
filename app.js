@@ -23,12 +23,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(
   pinoHttp({
     logger,
-    serializers: {
-      req(req) {
-        req.body = req.raw.body;
-        return req;
-      },
-    },
   })
 );
 
