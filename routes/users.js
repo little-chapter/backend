@@ -953,8 +953,6 @@ router.post("/google-sign-in", async (req, res) => {
       ],
     });
 
-    let isNewUser = false;
-
     if (!user) {
       // 用戶不存在，創建新用戶
       const randomPassword = Math.random().toString(36).slice(-12);
@@ -971,7 +969,6 @@ router.post("/google-sign-in", async (req, res) => {
       });
 
       user = await userRepository.save(newUser);
-      isNewUser = true;
     } else {
       // 檢查帳戶是否被停用
       if (!user.is_active) {
@@ -1000,13 +997,10 @@ router.post("/google-sign-in", async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_DAY || "30d" }
     );
 
-    // 回傳登入成功訊息與使用者資訊
-    const statusCode = isNewUser ? 201 : 200;
-    const message = isNewUser ? "Google 註冊並登入成功" : "Google 登入成功";
-
-    res.status(statusCode).json({
+    // 統一回傳登入成功訊息與使用者資訊
+    res.status(200).json({
       status: true,
-      message: message,
+      message: "登入成功",
       data: {
         user: {
           id: user.id,
