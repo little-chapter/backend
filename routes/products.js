@@ -72,6 +72,7 @@ router.get("/", async(req, res, next)=>{
                 "products.publisher AS publisher",
                 "products.price AS price",
                 "products.discount_price AS discount_price",
+                "products.stock_quantity AS stock_quantity",
                 "image.image_url AS image_url",
                 "products.is_new_arrival AS is_new_arrival",
                 "products.is_bestseller AS is_bestseller",
@@ -200,10 +201,12 @@ router.get("/", async(req, res, next)=>{
                 publisher: product.publisher,
                 price: parseInt(product.price),
                 discountPrice: parseInt(product.discount_price),
+                stockQuantity: parseInt(product.stock_quantity),
                 imageUrl: product.image_url,
                 isNewArrival: product.is_new_arrival,
                 isBestseller: product.is_bestseller,
-                isDiscount: product.is_discount
+                isDiscount: product.is_discount,
+                quantity: 1,
             }
         })
         res.status(200).json({
@@ -431,7 +434,8 @@ router.get("/:productId", async(req, res, next)=>{
                 publishDate: formatDateToYYYYMMDD(productData.publish_date),
                 isbn: productData.isbn,
                 pageCount: productData.page_count,
-                introductionHtml: productData.introduction_html
+                introductionHtml: productData.introduction_html,
+                quantity: 1
             }
         })
     }catch(error){
