@@ -1,15 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const { dataSource } = require("../db/data-source");
+const logger = require("../utils/logger")("Users");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/secret");
 const {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendVerificationNewEmail
 } = require("../utils/mailer");
 const { generateVerificationCode } = require("../utils/codeGenerator");
 const { verifyToken } = require("../middlewares/auth");
+const { isValidEmail, isNotValidString } = require("../utils/validUtils");
 const { google } = require("googleapis");
 
 // 用戶註冊
@@ -742,6 +745,140 @@ router.put("/password", verifyToken, async (req, res) => {
     });
   }
 });
+
+
+// /請求更新 Email
+router.post("/email-change", verifyToken, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { newEmail = null } = req.body;
+
+    // 驗證新 email 為有效資料
+    if (!isValidEmail(newEmail)) {
+      res.status(400).json({
+        "status": false,
+        "message": "請輸入有效的 Email"
+      });
+      return;
+    }
+
+    // 驗證有這個用戶
+    const userRepo = dataSource.getRepository("User");
+    const user = await userRepo.findOne({
+      where: { "id": userId }
+    });
+    if (!user) {
+      res.status(404).json({
+        "status": false,
+        "message": "找不到該用戶"
+      });
+      return;
+    }
+
+    // 驗證新 Email 沒被註冊
+    const existingEmail = await userRepo.findOne({
+      where: { "email": newEmail }
+    });
+    if (existingEmail) {
+      res.status(409).json({
+        "status": false,
+        "message": "此 Email 已被註冊"
+      });
+      return;
+    }
+
+    // 生成驗證碼並設定過期時間（30分鐘後）
+    const verificationCode = generateVerificationCode();
+    // const codeExpiryTime = new Date();
+    // codeExpiryTime.setMinutes(codeExpiryTime.getMinutes() + 30);
+    const EXPIRY_MINUTES = 30;
+    const codeExpiryTime = new Date(Date.now() + EXPIRY_MINUTES * 60 * 1000);
+
+    // 將新 Email、驗證碼、驗證碼過期時間 寫入資料表
+    user.new_email = newEmail;
+    user.new_email_code = verificationCode;
+    user.new_email_code_time = codeExpiryTime;
+    await userRepo.save(user);
+
+    // 寄發驗證信
+    const emailSent = await sendVerificationNewEmail(newEmail, verificationCode);
+
+    res.status(200).json({
+      "status": true,
+      "message": emailSent ? "已發送驗證信至信箱" : "驗證郵件發送失敗，請稍後使用重新發送驗證信功能"
+    });
+  } catch (error) {
+    logger.error("更新 Email 失敗: ", error);
+    next(error);
+  }
+});
+
+// 請求驗證新 Email
+router.post("/email-change/verify", verifyToken, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { newEmail = null, newEmailCode = null } = req.body;
+
+    // 驗證新 email 為有效資料
+    if (!isValidEmail(newEmail)) {
+      res.status(400).json({
+        "status": false,
+        "message": "請輸入有效的 Email"
+      });
+      return;
+    }
+
+    // 驗證有這個用戶 與 驗證碼有效
+    const userRepo = dataSource.getRepository("User");
+    const user = await userRepo.findOne({
+      select: ["id", "email", "new_email", "new_email_code", "new_email_code_time"],
+      where: { "id": userId }
+    });
+    if (!user) {
+      res.status(404).json({
+        "status": false,
+        "message": "找不到該用戶"
+      });
+      return;
+    }
+    if (newEmail !== user.new_email) {
+      res.status(400).json({
+        "status": false,
+        "message": "Email 與 驗證紀錄不符"
+      });
+      return;
+    }
+    if (newEmailCode !== user.new_email_code) {
+      res.status(400).json({
+        "status": false,
+        "message": "請輸入有效的驗證碼"
+      });
+      return;
+    }
+    const now = new Date();
+    if (!user.new_email_code_time || now > user.new_email_code_time) {
+      res.status(400).json({
+        "status": false,
+        "message": "驗證碼過期，請重新申請"
+      });
+      return;
+    }
+
+    // 更新 Email
+    user.email = newEmail;
+    user.new_email = null;
+    user.new_email_code = null;
+    user.new_email_code_time = null;
+    await userRepo.save(user);
+
+    res.status(200).json({
+      "status": true,
+      "message": "Email 已更新，請重新登入"
+    });
+
+  } catch (error) {
+    logger.error("驗證新 Email 失敗: ", error);
+    next(error);
 
 // Google 第三方登入
 router.post("/google-sign-in", async (req, res) => {

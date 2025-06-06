@@ -190,7 +190,7 @@ router.get("/dashboard", verifyToken, verifyAdmin, async(req, res, next)=>{
       }
     });
   } catch (error) {
-    logger.error("取得取得待辦事項失敗:", error);
+    logger.error("取得後台銷售統計失敗:", error);
     next(error);
   }
 });
@@ -216,7 +216,7 @@ router.get("/task", verifyToken, verifyAdmin, async(req, res, next)=>{
         }
     });
   } catch (error) {
-    logger.error("取得取得待辦事項失敗:", error);
+    logger.error("取得待辦事項失敗:", error);
     next(error);
   }
 });
