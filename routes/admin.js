@@ -221,12 +221,150 @@ router.get("/task", verifyToken, verifyAdmin, async (req, res, next) => {
     }
 });
 
+// 取得所有用戶的列表
+router.get("/users", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const {
+            search,
+            status,
+            role,
+            page,
+            per
+        } = req.query;
+        res.status(200).json({
+            "status": true,
+            "message": "所有用戶列表取得成功",
+            // "data": {
+            //     "page": 1,
+            //     "limit": 10,
+            //     "users": [
+            //         {
+            //         "name": "jack123",
+            //         "email": "jack@example.com",
+            //         "phone": "0933311540",
+            //         "role": "customer",
+            //         "isActive": true,
+            //         "isAdmin": false
+            //         },
+            //         {
+            //         "name": "admin01",
+            //         "email": "admin@example.com",
+            //         "phone": "0910263745",
+            //         "role": "admin",
+            //         "isActive": true,
+            //         "isAdmin": true
+            //         }
+            //     ]
+            // }
+        });
+    } catch (error) {
+        logger.error("取得所有用戶列表失敗:", error);
+        next(error);
+    }
+});
+
+// 更新特定用戶的資訊
+router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const {userId} = req.params;
+        const {
+            name = null,    // 必填
+            gender = null,
+            phone = null,
+            birthDate = null,
+            address = null,
+            role = null,    // 必填
+            isActive = null,// 必填
+            is_admin = null // 必填
+        } = req.body;
+        // 驗證 userId
+        // 驗證 req.body
+        // 
+// "name": "jack_updated",
+// "gender":"male",
+// "phone": "0987654321",
+// "birthDate": "1992-08-20",
+// "address": "台南市東區中華東路100號",
+// "role": "customer", customer/admin
+// "isActive": true,
+// "isAdmin": false
+
+        res.status(200).json({
+            "status": true,
+            "message": "特定用戶資訊更新成功",
+            // "data": {
+            //     "name": "jack_updated",
+            //     "gender": "male",
+            //     "email": "jack@example.com",
+            //     "phone": "0987654321",
+            //     "birthDate": "1992-08-20",
+            //     "address": "台南市東區中華東路100號",
+            //     "role": "customer",
+            //     "isActive": true,
+            //     "isAdmin": false,
+            //     "updatedAt": "2024-04-12T08:30:00Z",
+            //     "createdAt": "2024-04-12T08:30:00Z"
+            // }
+        });
+    } catch (error) {
+        logger.error("更新特定用戶資訊失敗:", error);
+        next(error);
+    }
+});
+
+// 取得特定用戶的詳細資訊
+router.get("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const {userId} = req.params;
+
+        if (!validator.isUUID(userId)){
+            res.status(400).json({
+                "status": false,
+                "message": "請填寫有效的 userId"
+            });
+            return;
+        }
+        
+        const user = await dataSource.getRepository("User").findOne({
+            where:{"id": userId}
+        });
+        if(!user){
+            res.status(404).json({
+                "status": false,
+                "message": "找不到該用戶"
+            });
+            return;
+        }
+
+        res.status(200).json({
+            "status": true,
+            "message": "特定用戶詳細資訊取得成功",
+            "data": {
+                "name": user.name,
+                "gender": user.gender || null,
+                "email": user.email,
+                "phone": user.phone || null,
+                "birthDate": user.birthDate || null,
+                "role": user.role,
+                "isActive": user.is_active,
+                "isAdmin": user.is_admin,
+                "createdAt": user.created_at || null,
+                "updatedAt": user.updated_at || null,
+                "address": user.address || null
+            }
+        });
+    } catch (error) {
+        logger.error("取得特定用戶詳細資訊失敗:", error);
+        next(error);
+    }
+});
+
 // 管理者刪除商品
 router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const { productId } = req.params;
 
-        if(isNotValidInteger(Number(productId))){
+        if (isNotValidInteger(Number(productId))) {
             res.status(400).json({
                 "status": true,
                 "message": "請輸入有效的 productId"
@@ -235,9 +373,9 @@ router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res,
 
         const productsRepo = dataSource.getRepository("Products");
         const product = await productsRepo.findOne({
-            where:{"id": productId}
+            where: { "id": productId }
         });
-        if(!product){
+        if (!product) {
             res.status(404).json({
                 "status": true,
                 "message": "找不到此商品"
