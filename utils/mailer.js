@@ -239,144 +239,220 @@ const sendOrderConfirmationEmail = async (to, order, itemsStr) => {
       to,
       subject: `Little Chapter - 您的訂單 ${order.orderNumber} 已成立`,
       html: `
-        <!DOCTYPE html>
-        <html lang="zh-TW">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>您的訂單 ${order.orderNumber} 已成立</title>
-            <style>
-              p{
-                margin-top: 0;
-              }
-              hr{
-                border: none;
-                border-top: 1px solid #eee;
-                margin: 25px 0;
-              }
-              .title{
-                text-align: center;
-                color: #e8652b;
-                margin: 0;
-                padding-top: 15px;
-              }
-              .column{
-                display: flex;
-                justify-content: space-between;
-              }
-            </style>
-        </head>
-        <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="border: 1px solid #e9e9e9; border-radius: 5px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-            <div style="text-align: center; margin-bottom: 20px;">
-              <a href="https://a-little-chapter-frontend.vercel.app/" target="_blank">
-                <img src="https://firebasestorage.googleapis.com/v0/b/little-chapter.firebasestorage.app/o/logo%2Flogo.png?alt=media&token=21043e7f-9478-49b2-a4c9-d11a6dd2bce2" alt="Little-Chapter-Logo" style="width: 300px; text-align: center;">
-              </a>
-              <h2 style="color: #e8652b; margin-top: 0;">您的訂單 ${order.orderNumber} 已成立！</h2>
-            </div>
-            <div class="column">
-              <p>訂單狀態：</p>
-              <p>${order.orderStaus}</p>
-            </div>
-            <div class="column">
-              <p>付款狀態：</p>
-              <p>${order.paymentStaus}</p>
-            </div>
-            <div class="column">
-              <p>送貨狀態：</p>
-              <p>${order.shippingStaus}</p>
-            </div>
-            <div style="text-align: center; margin: 25px 0;">
-              <a href="${
-                process.env.WEBSITE_URL
-              }/api/orders/${order.orderNumber}" 
-              style="display: inline-block; background-color: #e8652b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 1000px; font-weight: 500;">
-              查看訂單詳細
-              </a>
-            </div>
-            <hr>
-            <h3 class="title">訂單資訊</h3>
-            <div class="column">
-              <p>成立時間：</p>
-              <p>${order.createdAt}</p>
-            </div>
-            <div class="column">
-              <p>訂單編號：</p>
-              <p>${order.orderNumber}</p>
-            </div>
-            <div class="column">
-              <p>訂購人：</p>
-              <p>${order.userName}</p>
-            </div>
-            <h3 class="title">付款資訊</h3>
-            <div class="column">
-              <p>交易時間：</p>
-              <p>${order.payTime}</p>
-            </div>
-            <div class="column">
-              <p>交易金額：</p>
-              <p>NT$${order.amount}</p>
-            </div>
-            <div class="column">
-              <p>付款方式：</p>
-              <p>${order.paymentMethod}</p>
-            </div>
-            <div class="column">
-              <p>發票類型：</p>
-              <p>${order.invoiceType}</p>
-            </div>
-            <h3 class="title">送貨資訊</h3>
-            <div class="column">
-              <p>送貨方式：</p>
-              <p>${order.shippingMethod}</p>
-            </div>
-            <div class="column">
-              <p>收件人：</p>
-              <p>${order.recipientName}</p>
-            </div>
-            <div class="column">
-              <p>收件人信箱：</p>
-              <p>${order.recipientEmail}</p>
-            </div>
-            <div class="column">
-              <p>收件人電話：</p>
-              <p>${order.recipientPhone}</p>
-            </div>
-            <div class="column">
-              <p>收件地址：</p>
-              <p>${order.shippingAddress}</p>
-            </div>
-            <h3 class="title">訂單備註</h3>
-            <p style="text-align: center;">${order.note}</p>
-            <h3 class="title">訂購商品</h3>
-            <ul style="list-style-type: none; padding: 0;">
+      <!DOCTYPE html>
+      <html lang="zh-TW">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>您的訂單 ${order.orderNumber} 已成立</title>
+        <style>
+          hr{
+            border: none;
+            border-top: 1px solid #eee;
+            margin: 25px 0;
+          }
+          .title{
+            text-align: center;
+            color: #e8652b;
+            margin: 0;
+            margin-top: 15px;
+            margin-bottom: 10px;
+          }
+          .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+          }
+          .product-table th {
+            background-color: #f8f9fa;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 1px solid #eee;
+          }
+          .product-table td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #eee;
+          }
+        </style>
+      </head>
+      <body style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="border: 1px solid #e9e9e9; border-radius: 5px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <a href="${process.env.FRONTEND_URL}" target="_blank">
+              <img src="https://firebasestorage.googleapis.com/v0/b/little-chapter.firebasestorage.app/o/logo%2Flogo.png?alt=media&token=21043e7f-9478-49b2-a4c9-d11a6dd2bce2" alt="Little-Chapter-Logo" style="width: 300px; text-align: center;">
+            </a>
+            <h2 style="color: #e8652b; margin-top: 0;">您的訂單 ${order.orderNumber} 已成立！</h2>
+          </div>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr>
+              <td style="text-align: left;">訂單狀態</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.orderStaus}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">付款狀態</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.paymentStaus}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">送貨狀態</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.shippingStaus}</td>
+            </tr>
+          </table>
+          <div style="text-align: center; margin: 25px 0;">
+            <a href="${process.env.FRONTEND_URL}/account/orders" 
+            style="display: inline-block; background-color: #e8652b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 1000px; font-weight: 500;">
+              查看個人訂單
+            </a>
+          </div>
+          <hr>
+          <h3 class="title">訂單資訊</h3>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">成立時間</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.createdAt}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">訂單編號</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.orderNumber}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">訂購人</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.userName}</td>
+            </tr>
+          </table>
+          <h3 class="title">付款資訊</h3>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">交易時間</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.payTime}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">交易金額</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">NT$ ${order.amount}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">付款方式</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.paymentMethod}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">發票類型</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.invoiceType}</td>
+            </tr>
+          </table>
+          <h3 class="title">送貨資訊</h3>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">送貨方式</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.shippingMethod}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">收件人</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.recipientName}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">收件人信箱</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.recipientEmail}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">收件人電話</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.recipientPhone}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">收件地址</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">${order.shippingAddress}</td>
+            </tr>
+          </table>
+          <h3 class="title">訂單備註</h3>
+          <p style="text-align: center; background: #f8f9fa; padding-top: 10px; padding-bottom: 10px;">${order.note}</p>
+          <h3 class="title">購物明細</h3>
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th>商品名稱</th>
+                <th>單價</th>
+                <th>數量</th>
+                <th>小計</th>
+              </tr>
+            </thead>
+            <tbody>
               ${itemsStr}
-            </ul>
-            <hr>
-            <div class="column">
-              <p>小計</p>
-              <p>NT$${order.totalAmount}</p>
-            </div>
-            <div class="column" style="color: red;">
-              <p>折扣</p>
-              <p>- NT$${order.discountAmount}</p>
-            </div>
-            <div class="column">
-              <p>運費</p>
-              <p>NT$${order.shippingFee}</p>
-            </div>
-            <div class="column">
-              <p>合計</p>
-              <p>NT$${order.finalAmount}</p>
-            </div>
-            <hr>
+            </tbody>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">商品小計</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">NT$ ${order.totalAmount}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">折扣金額</td>
+              <td width="auto"></td>
+              <td style="color: red; text-align: right;">- NT$ ${order.discountAmount}</td>
+            </tr>
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">運費</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">NT$ ${order.shippingFee}</td>
+            </tr>
+          </table>
+          <hr>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 15px;">
+            <tr style="margin-bottom: 10px;">
+              <td style="text-align: left;">總金額</td>
+              <td width="auto"></td>
+              <td style="text-align: right;">NT$ ${order.finalAmount}</td>
+            </tr>
+          </table>
+          <hr>
             <p style="font-size: 12px; color: #777; text-align: center;">
               此為系統自動發送的郵件，請勿直接回覆。<br>
               © ${new Date().getFullYear()} Little Chapter 繪本平台. 保留所有權利。
             </p>
           </div>
         </body>
-        </html>`,
+        </html>
+      `,
     };
     await transporter.sendMail(mailOptions);
     return true;
