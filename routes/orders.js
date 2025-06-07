@@ -126,7 +126,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         const items = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .innerJoin("orderItems.Products", "products")
-            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id","image.is_primary =:isPrimary", {isPrimary: true})
+            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id")
             .select([
                 "orderItems.product_id AS id",
                 "orderItems.product_title AS title",
@@ -136,6 +136,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
                 "image.image_url AS image_url"
             ])
             .where("orderItems.order_id =:orderId", {orderId: existOrder.id})
+            .andWhere("image.is_primary =:isPrimary", {isPrimary: true})
             .getRawMany();
         const itemsResult = items.map(item =>{
             return {
