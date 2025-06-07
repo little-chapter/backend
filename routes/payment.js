@@ -2,10 +2,10 @@ const express = require("express");
 const router = express.Router();
 const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Payment');
-const { isNotValidString, isNotValidInteger, isValidEmail } = require("../utils/validUtils");
 const { decryptAES, sha256 } = require("../utils/encryptUtils");
 const { convertUtcToTaipei } = require("../utils/datetimeUtils");
 const { generateEzpay } = require("../utils/generateEzpay");
+const { sendOrderConfirmationEmail } = require("../utils/mailer");
 
 const { 
     NEWEPAY_HASHKEY, 
@@ -49,19 +49,14 @@ router.post("/notify", async(req, res, next) =>{
     try{
         const raw = req.body.TradeInfo;
         const resSHA = sha256(`HashKey=${NEWEPAY_HASHKEY}&${raw}&HashIV=${NEWEPAY_HASHIV}`).toUpperCase();
-        console.log('resSHA:',resSHA)
         if(resSHA !== req.body.TradeSha){
             logger.warn("回傳TradeSha錯誤");
-            console.log("回傳TradeSha錯誤");
             return
         }
-        //解密驗證
         const decrypted = decryptAES(raw, NEWEPAY_HASHKEY, NEWEPAY_HASHIV);
-        console.log("解密decrypted:", decrypted);
         const result = decrypted.Result; //回傳細節
         const payTime = result.PayTime; //交易時間
         const orderNumber = result.MerchantOrderNo; //訂單編號
-        //非成功交易
         if(decrypted.Status !== "SUCCESS"){
             //建立交易失敗Transaction
             await dataSource.getRepository("PaymentTransactions")
@@ -73,7 +68,7 @@ router.post("/notify", async(req, res, next) =>{
                     payment_type: result.PaymentType,
                     amount: result.Amt,
                     status: decrypted.Status,
-                    payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10)).toISOString(),
+                    payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10) + "+0800"),
                     bank_code: result.PayBankCode || null,
                     payer_account5code: result.PayerAccount5Code || null,
                     account_number: result.AccountNumber || null,
@@ -88,20 +83,26 @@ router.post("/notify", async(req, res, next) =>{
                     raw_response: JSON.stringify(decrypted)
                 })
                 .execute();
+            logger.warn(`訂單編號 ${orderNumber} 交易失敗 ${decrypted.Status} : ${decrypted.Message}`)
         }else{
             const now = new Date().toISOString();
             const pendingOrder = await dataSource.getRepository("PendingOrders")
                 .createQueryBuilder("pendingOrders")
-                .where("pendingOrders.order_number :=orderNumber", {orderNumber: orderNumber})
+                .where("pendingOrders.order_number =:orderNumber", {orderNumber: orderNumber})
                 .andWhere("pendingOrders.status =:status", {status: "pending"})
                 .andWhere("pendingOrders.expired_at >=:expiredAt", {expiredAt: now})
-                .getRawOne();
+                .getOne();
             if(!pendingOrder || Number(result.Amt) !== Number(pendingOrder.final_amount)){
-                logger.warn(`暫存訂單編號${orderNumber}不存在或交易金額與訂單總金額不符`)
+                logger.warn(`暫存訂單編號 ${orderNumber} 不存在或交易金額與訂單總金額不符`)
                 return
             }
+            logger.info(`訂單編號 ${orderNumber} 交易成功`)
             const pendingOrderId = pendingOrder.id;
-            const pendingOrderItems = await dataSource.getRepository("PendingOrderItems").find({pending_order_id: pendingOrderId});
+            const pendingOrderItems = await dataSource.getRepository("PendingOrderItems").find({
+                where: {
+                    pending_order_id: pendingOrderId
+                }
+            });
             await dataSource.transaction(async(transactionalEntityManager) => {
                 const userId = pendingOrder.user_id;
                 //建立正式訂單
@@ -132,10 +133,14 @@ router.post("/notify", async(req, res, next) =>{
                         note: pendingOrder.note
                     })
                     .execute();
-                //取得正式訂單ID
+                if(newOrder.identifiers.length === 0){
+                    logger.warn(`建立正式訂單項目失敗`)
+                    return
+                }
                 const newOrderId = newOrder.identifiers[0].id;
+                logger.info(`已建立正式訂單ID: ${newOrderId}`)
                 for(const item of pendingOrderItems){
-                    await transactionalEntityManager
+                    const newOrderItem = await transactionalEntityManager
                         .createQueryBuilder()
                         .insert()
                         .into("OrderItems")
@@ -148,9 +153,14 @@ router.post("/notify", async(req, res, next) =>{
                             subtotal: parseInt(item.subtotal)
                         })
                         .execute();
+                    if(newOrderItem.identifiers.length === 0){
+                        logger.warn(`建立正式訂單項目失敗`)
+                        return
+                    }
+                    logger.info(`已建立正式訂單項目ID: ${newOrderItem.identifiers[0].id}`)
                 }
                 //建立交易資料
-                await transactionalEntityManager
+                const newTransaction = await transactionalEntityManager
                     .createQueryBuilder()
                     .insert()
                     .into("PaymentTransactions")
@@ -161,7 +171,7 @@ router.post("/notify", async(req, res, next) =>{
                         payment_type: result.PaymentType,
                         amount: result.Amt,
                         status: decrypted.Status,
-                        payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10)).toISOString(),
+                        payment_time: new Date(payTime.slice(0, 10) + " " + payTime.slice(10) + "+0800"),
                         bank_code: result.PayBankCode || null,
                         payer_account5code: result.PayerAccount5Code || null,
                         account_number: result.AccountNumber || null,
@@ -175,29 +185,34 @@ router.post("/notify", async(req, res, next) =>{
                         raw_response: JSON.stringify(decrypted)
                     })
                     .execute();
-                //刪除userId的所有購物車項目(CartItems)
-                await transactionalEntityManager
+                if(newTransaction.identifiers.length === 0){
+                    logger.warn(`建立交易資料失敗`)
+                    return
+                }
+                logger.info(`已建立交易資料ID: ${newTransaction.identifiers[0].id}`)
+                //刪除購物車項目
+                const deleteCart = await transactionalEntityManager
                     .createQueryBuilder()
                     .delete()
                     .from("CartItems")
-                    .where("user_id =:userId", {userId: userId})
+                    .where({user_id: userId})
                     .execute();
-                //刪除該orderNumber的暫存訂單、暫存訂單項目(PendingOrders、PendingOrderItems)
-                await transactionalEntityManager
+                logger.info(`已刪除購物車項目筆數: ${deleteCart.affected}`)
+                //刪除暫存訂單、暫存訂單項目
+                const deletePendingOrder = await transactionalEntityManager
                     .createQueryBuilder()
                     .delete()
                     .from("PendingOrders")
-                    .where("order_id =:orderId", {orderId: pendingOrderId})
+                    .where({id: pendingOrderId})
                     .execute();
-                await transactionalEntityManager
-                    .createQueryBuilder()
-                    .delete()
-                    .from("PendingOrderItems")
-                    .where("pending_order_id =:pendingOrderId", {pendingOrderId: pendingOrderId})
-                    .execute();
+                if(deletePendingOrder.affected === 0){
+                    logger.warn(`刪除暫存訂單失敗、暫存訂單項目`)
+                    return
+                }
+                logger.info(`已刪除暫存訂單筆數: ${deletePendingOrder.affected}`)
                 //更新商品庫存
                 for(const item of pendingOrderItems){
-                    await transactionalEntityManager
+                    const updateProduct = await transactionalEntityManager
                         .createQueryBuilder()
                         .update("Products")
                         .set({
@@ -206,27 +221,62 @@ router.post("/notify", async(req, res, next) =>{
                         })
                         .where("Products.id =:productId", {productId: item.product_id})
                         .execute();
+                    if(updateProduct.affected === 0){
+                        logger.warn(`商品編號 ${item.product_id} 庫存更新失敗`)
+                    }else{
+                        logger.info(`已更新商品編號 ${item.product_id} 庫存`)
+                    }
                     //確認庫存
                     const productStock = await transactionalEntityManager
-                        .createQueryBuilder("Products")
-                        .select(["Products.stock_quantity AS stock_quantity"])
-                        .where("Products.id =:productId", {productId: item.product_id})
-                        .getRawOne();
-                    //通知管理者商品庫存不足
+                        .getRepository("Products")
+                        .findOne({
+                            select: [
+                                "id",
+                                "title",
+                                "stock_quantity"
+                            ],where: {
+                                id: item.product_id
+                            }
+                        })
+                    //建立補貨任務
+                    if(productStock.stock_quantity === 0){
+                        const newTask = await transactionalEntityManager
+                            .createQueryBuilder()
+                            .insert()
+                            .into("Tasks")
+                            .values({
+                                title: "庫存警示",
+                                content: `提醒您，編號 ${productStock.id} 之《${productStock.title}》商品已無庫存，請儘速處理以免影響銷售，謝謝。`,
+                                type: "restock",
+                                related_resource_type: "products",
+                                related_resource_id: item.product_id
+                            })
+                            .execute();
+                        if(newTask.identifiers.length === 0){
+                            logger.warn(`發送商品編號 ${productStock.id} 庫存不足通知失敗`)
+                        }else{
+                            logger.info(`已發送庫存不足通知之商品編號: ${productStock.id}`)
+                        }
+                    }
                 }
-                //更新折扣碼使用次數
                 if(pendingOrder.discount_code){
                     const codeId = pendingOrder.discount_code;
-                    await transactionalEntityManager
+                    //更新折扣碼使用次數
+                    const updateCode = await transactionalEntityManager
                         .createQueryBuilder()
                         .update("DiscountCodes")
                         .set({
                             used_count: () => "used_count + 1"
                         })
-                        .where("DiscountCodes.id =:codeId", {codeId: codeId})
+                        .where({id: codeId})
                         .execute();
+                    if(updateCode.affected === 0){
+                        logger.warn(`折扣碼編號 ${codeId} 更新使用次數失敗`)
+                    }else{
+                        logger.info(`折扣碼編號 ${codeId} 更新使用次數成功`)
+                    }
                     //建立使用折扣碼資料
-                    await transactionalEntityManager
+                    const codeUsage = await transactionalEntityManager
                         .createQueryBuilder()
                         .insert()
                         .into("DiscountCodeUsages")
@@ -237,17 +287,21 @@ router.post("/notify", async(req, res, next) =>{
                             discount_amount: parseInt(pendingOrder.discount_amount)
                         })
                         .execute();
+                    if(codeUsage.identifiers.length === 0){
+                        logger.warn(`用戶 ${userId} 建立折扣碼使用紀錄失敗`)
+                    }else{
+                        logger.info(`用戶 ${userId} 建立折扣碼使用紀錄ID: ${codeUsage.identifiers[0].id}`)
+                    }
                 }
             })
-            //取出正式訂單、正式訂單項目、使用者部分資料(Orders、OrderItems、Users)
-            const officalOrder = await dataSource.getRepository("Orders")
+            const officialOrder = await dataSource.getRepository("Orders")
                 .createQueryBuilder("orders")
                 .innerJoin("PaymentTransactions", "transaction", "transaction.order_id = orders.id")
                 .innerJoin("orders.User", "user")
                 .select([
-                    "order.id AS id",
-                    "order.order_number AS order_number",
-                    "order.order_status AS order_status",
+                    "orders.id AS id",
+                    "orders.order_number AS order_number",
+                    "orders.order_status AS order_status",
                     "orders.payment_status AS payment_status",
                     "orders.shipping_status AS shipping_status",
                     "orders.created_at AS created_at",
@@ -271,30 +325,74 @@ router.post("/notify", async(req, res, next) =>{
                 ])
                 .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
                 .getRawOne();
-            const officailOrderItems = await dataSource.getRepository("OrderItems")
-                .createQueryBuilder("orderItems")
-                .where("orderItems.order_id =:orderId", {orderId: officalOrder.id})
-                .getRawMany();
-            //串接發票開立API，取得EZPAY回應並建入發票資料(Invoices)
-            const invoiceData = generateEzpay(officalOrder, officailOrderItems);
-            const { ezpayReturn } = await axios.post(EZPAY_API_URL, invoiceData, {
+            const orderResult = {
+                id: officialOrder.id,
+                orderNumber: officialOrder.order_number,
+                orderStatus: officialOrder.order_status,
+                paymentStatus: officialOrder.payment_status,
+                shippingStatus: officialOrder.shipping_status,
+                createdAt: officialOrder.created_at,
+                email: officialOrder.email,
+                username: officialOrder.username,
+                paymentTime: officialOrder.payment_time,
+                amount: officialOrder.amount,
+                paymentMethod: officialOrder.payment_method,
+                invoiceType: officialOrder.invoice_type,
+                carrierNumber: officialOrder.carrier_number,
+                shippingMethod: officialOrder.shipping_method,
+                recipientName: officialOrder.recipient_name,
+                recipientEmail: officialOrder.recipient_email,
+                recipientPhone: officialOrder.recipient_phone,
+                shippingAddress: officialOrder.shipping_address,
+                note: officialOrder.note,
+                totalAmount: officialOrder.total_amount,
+                discountAmount: officialOrder.discount_amount,
+                shippingFee: officialOrder.shipping_fee,
+                finalAmount: officialOrder.final_amount,
+            }
+            const officialOrderItems = await dataSource.getRepository("OrderItems").find({
+                where: {
+                    order_id: orderResult.id
+                }
+            });
+            const itemsResult = officialOrderItems.map(item => ({
+                title: item.product_title,
+                quantity: item.quantity,
+                price: item.price,
+                subtotal: item.subtotal
+            }))
+            //發票開立
+            const invoiceData = generateEzpay(orderResult, itemsResult);
+            const formData = new URLSearchParams(invoiceData).toString();
+            const response = await fetch(EZPAY_API_URL, {
+                method: "POST",
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
+                body: formData
             });
+            if (!response.ok) {
+                const errorText = await response.text();
+                logger.warn(`EZPAY API error: ${response.status} - ${errorText}`)
+            }
+            const ezpayReturn = await response.json();
             const status = ezpayReturn.Status;
             if(status === "SUCCESS"){ //成功開立 或重複開立
                 const invoiceResult = JSON.parse(ezpayReturn.Result);
-                const existInvoice = await dataSource.getRepository("Invoices").findOneBy({merchant_order_no: invoiceResult.MerchantOrderNo, status: "SUCCESS"})
+                const existInvoice = await dataSource.getRepository("Invoices").findOne({
+                    where: {
+                        merchant_order_no: invoiceResult.MerchantOrderNo,
+                        status: "SUCCESS"
+                    }
+                });
                 if(existInvoice){
-                    console.log(`訂單編號${invoiceResult.MerchantOrderNo}已開立過發票`)
+                    logger.info(`訂單編號 ${invoiceResult.MerchantOrderNo} 已開立過發票: ${existInvoice.invoice_number}`)
                 }else{
                     const newInvoice = await dataSource.getRepository("Invoices")
                         .createQueryBuilder("invoices")
                         .insert()
-                        .into()
                         .values({
-                            order_id: officalOrder.id,
+                            order_id: orderResult.id,
                             merchant_order_no: invoiceResult.MerchantOrderNo,
                             invoice_number: invoiceResult.InvoiceNumber,
                             total_amount: parseInt(invoiceResult.TotalAmt),
@@ -305,34 +403,30 @@ router.post("/notify", async(req, res, next) =>{
                             qrcode_r: invoiceResult.QRcodeR || null,
                             check_code: invoiceResult.CheckCode,
                             status: status,
-                            create_time: new Date(invoiceResult.CreateTime).toISOString()
+                            create_time: invoiceResult.CreateTime + "+0800"
                         })
                         .execute();
                     if(newInvoice.identifiers.length === 0){
-                        logger.warn(`訂單編號${invoiceResult.MerchantOrderNo}新增發票失敗`)
-                        console.log(`訂單編號${invoiceResult.MerchantOrderNo}新增發票失敗`)
+                        logger.warn(`訂單編號 ${invoiceResult.MerchantOrderNo} 發票建立失敗`)
                     }else{
-                        logger.info(`訂單編號${invoiceResult.MerchantOrderNo}新增發票成功`)
+                        logger.info(`訂單編號 ${invoiceResult.MerchantOrderNo} 發票建立成功`)
                     }
                 }
-                
             }else{
-                //紀錄開立發票錯誤
+                //建立開立發票錯誤
                 await dataSource.getRepository("Invoices")
                     .createQueryBuilder("invoices")
                     .insert()
-                    .into()
                     .values({
-                        order_id: officalOrder.id,
-                        merchant_order_no: officalOrder.order_number,
-                        total_amount: parseInt(officalOrder.final_amount),
+                        order_id: orderResult.id,
+                        merchant_order_no: orderResult.orderNumber,
+                        total_amount: parseInt(orderResult.finalAmount),
                         status: status,
                         failed_message: ezpayReturn.Message,
                         create_time: new Date().toISOString()
                     })
                     .execute();
-                logger.warn(`開立訂單${officalOrder.order_number}發票錯誤${status}:${ezpayReturn.Message}`)
-                console.log(`開立訂單${officalOrder.order_number}發票錯誤${status}:${ezpayReturn.Message}`)
+                logger.warn(`訂單編號 ${orderResult.orderNumber} 發票開立錯誤 ${status}: ${ezpayReturn.Message}`)
             }
             //寄送訂單成立信件
             const orderStatusList = {
@@ -363,46 +457,46 @@ router.post("/notify", async(req, res, next) =>{
             };
             const invoiceTypeList = {
                 "e-invoice": "電子發票",
-                paper: "紙本發票"
+                paper: "紙本發票(隨商品寄出)"
             };
             const orderPayload = {
-                orderNumber: officalOrder.order_number,
-                orderStaus: orderStatusList[officalOrder.order_status],
-                paymentStaus: paymentStatusList[officalOrder.payment_status],
-                shippingStaus: shippingStatusList[officalOrder.shipping_status],
-                createdAt: convertUtcToTaipei(officalOrder.created_at),
-                userName: officalOrder.username || officalOrder.email,
-                payTime: convertUtcToTaipei(officalOrder.payment_time),
-                amount: parseInt(officalOrder.amount),
-                paymentMethod: paymentMethodList[officalOrder.payment_method],
-                invoiceType: invoiceTypeList[officalOrder.invoice_type],
-                shippingMethod: shippingMethodList[officalOrder.shipping_method],
-                recipientName: officalOrder.recipient_name,
-                recipientEmail: officalOrder.recipient_email,
-                recipientPhone: officalOrder.recipient_phone,
-                shippingAddress: officalOrder.shipping_address,
-                note: officalOrder.note || "未填寫",
-                totalAmount: parseInt(officalOrder.total_amount),
-                discountAmount: parseInt(officalOrder.discount_amount),
-                shippingFee: parseInt(officalOrder.shipping_fee),
-                finalAmount: parseInt(officalOrder.final_amount)
+                orderNumber: orderResult.orderNumber,
+                orderStaus: orderStatusList[orderResult.orderStatus],
+                paymentStaus: paymentStatusList[orderResult.paymentStatus],
+                shippingStaus: shippingStatusList[orderResult.shippingStatus],
+                createdAt: convertUtcToTaipei(orderResult.createdAt),
+                userName: orderResult.username || orderResult.email,
+                payTime: convertUtcToTaipei(orderResult.paymentTime),
+                amount: parseInt(orderResult.amount),
+                paymentMethod: paymentMethodList[orderResult.paymentMethod],
+                invoiceType: invoiceTypeList[orderResult.invoiceType],
+                shippingMethod: shippingMethodList[orderResult.shippingMethod],
+                recipientName: orderResult.recipientName,
+                recipientEmail: orderResult.recipientEmail,
+                recipientPhone: orderResult.recipientPhone,
+                shippingAddress: orderResult.shippingAddress,
+                note: orderResult.note || "未填寫",
+                totalAmount: parseInt(orderResult.totalAmount),
+                discountAmount: parseInt(orderResult.discountAmount),
+                shippingFee: parseInt(orderResult.shippingFee),
+                finalAmount: parseInt(orderResult.finalAmount)
             };
             let officalItemsStr = "";
-            officailOrderItems.forEach(item =>{
-                officalItemsStr += `<li class="column">
-                                    <p>${item.title}</p>
-                                    <p>NT$${parseInt(item.price)}</p>
-                                    <p>X ${item.quantity}</p>
-                                    <p>NT$${parseInt(item.subtotal)}</p>
-                                </li>`;
+            itemsResult.forEach(item =>{
+                officalItemsStr += `<tr>
+                    <td>${item.title}</td>
+                    <td>NT$ ${parseInt(item.price)}</td>
+                    <td>${item.quantity}</td>
+                    <td>NT$ ${parseInt(item.subtotal)}</td>
+                </tr>`;
             })
-            const emailSent = await sendOrderConfirmationEmail(orderData.email, orderPayload, officalItemsStr);
+            const emailSent = await sendOrderConfirmationEmail(orderResult.email, orderPayload, officalItemsStr);
             if(emailSent === true){
-                logger.info(`成功寄送編號${orderPayload.orderNumber}訂單成立信件`)
+                logger.info(`訂單編號 ${orderPayload.orderNumber} 訂單成立信件寄送成功`)
             }else{
-                logger.warn(`寄送編號${orderPayload.orderNumber}訂單成立信件失敗`)
-                console.log(`寄送編號${orderPayload.orderNumber}訂單成立信件失敗`);
+                logger.warn(`訂單編號 ${orderPayload.orderNumber} 訂單成立信件寄送失敗`)
             }
+            res.send('|1|OK|');
         }
     }catch(error){
         logger.error('金流背景回傳錯誤:', error);

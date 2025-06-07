@@ -242,9 +242,9 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 })
                 .execute();
             if(pendingOrder.identifiers.length === 0){
-                logger.warn("新增暫存訂單失敗");
-                console.log("新增暫存訂單失敗")
-                return
+                logger.warn(`用戶 ${id} 進行 ${paymentMethod} 結帳，建立暫存訂單失敗`);
+            }else{
+                logger.info(`用戶 ${id} 進行 ${paymentMethod} 結帳，建立暫存訂單ID: ${pendingOrder.identifiers[0].id}`);
             }
             const pendingOrderId = pendingOrder.identifiers[0].id;
             //暫存訂單商品關聯
@@ -271,9 +271,9 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 .values(pendingOrderItem)
                 .execute();
             if(orderItemResult.identifiers.length === 0){
-                logger.warn("新增暫存訂單商品關聯失敗");
-                console.log("新增暫存訂單商品關聯失敗")
-                return
+                logger.warn("建立暫存訂單項目失敗");
+            }else{
+                logger.info(`建立暫存訂單項目成功`);
             }
         })
         const order = generateTradeInfo(finalAmount, email, orderNumber);
