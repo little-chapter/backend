@@ -266,46 +266,144 @@ router.get("/users", verifyToken, verifyAdmin, async (req, res, next) => {
 // 更新特定用戶的資訊
 router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
-        const {userId} = req.params;
+        const { userId } = req.params;
         const {
-            name = null,    // 必填
+            name = null,        // 必填
             gender = null,
             phone = null,
             birthDate = null,
             address = null,
-            role = null,    // 必填
-            isActive = null,// 必填
-            is_admin = null // 必填
+            role = null,        // 必填
+            isActive = null,    // 必填
+            isAdmin = null      // 必填
         } = req.body;
-        // 驗證 userId
-        // 驗證 req.body
-        // 
-// "name": "jack_updated",
-// "gender":"male",
-// "phone": "0987654321",
-// "birthDate": "1992-08-20",
-// "address": "台南市東區中華東路100號",
-// "role": "customer", customer/admin
-// "isActive": true,
-// "isAdmin": false
 
+        // 驗證使用者輸入的為有效資料
+        if (!validator.isUUID(userId)) {
+            res.status(400).json({
+                "status": false,
+                "message": "請填寫有效的 userId"
+            });
+            return;
+        }
+        if (!name || !role || isActive === null || isAdmin === null) {
+            res.status(400).json({
+                "status": false,
+                "message": "有必填欄位未填寫（name, role, isActive, isAdmin）"
+            });
+            return;
+        }
+        if (isNotValidString(name) || name.length > 50) {
+            res.status(400).json({
+                "status": false,
+                "message": "name 填寫未符合規則（最多 50 個字元，不能空白）"
+            });
+            return;
+        }
+        if (gender) {
+            if (gender !== "female" && gender !== "male") {
+                res.status(400).json({
+                    "status": false,
+                    "message": "gender 填寫未符合規則（請填 female 或 male）"
+                });
+                return;
+            }
+        }
+        if (phone) {
+            if (!validator.isMobilePhone(phone, "zh-TW")) {
+                res.status(400).json({
+                    "status": false,
+                    "message": "phone 填寫未符合規則（請填入台灣手機格式，例：0912345678）"
+                });
+                return;
+            }
+        }
+        if (birthDate) {
+            if (!validator.isDate(birthDate)) {
+                res.status(400).json({
+                    "status": false,
+                    "message": "birthDate 填寫未符合規則（請填入日期格式，例：1990-01-01）"
+                });
+                return;
+            }
+        }
+console.log("address.length: ",address.length);       // 地址長度ＧＧ＝＝  
+        if (address) {
+            if (isNotValidString(address) || address.length < 10 || address.length > 50) {
+                res.status(400).json({
+                    "status": false,
+                    "message": "address 填寫未符合規則（最少 10 個字元，最多 50 個字元）"
+                });
+                return;
+            }
+        }
+        if (role !== "customer" && role !== "admin") {
+            res.status(400).json({
+                "status": false,
+                "message": "role 填寫未符合規則（請填 customer 或 admin）"
+            });
+            return;
+        }
+
+        if (!typeof isActive === "boolean") {
+            res.status(400).json({
+                "status": false,
+                "message": "isActive 填寫未符合規則（請填入布林格式，例：true 或 false）"
+            });
+            return;
+        }
+        if (!typeof isAdmin === "boolean") {
+            res.status(400).json({
+                "status": false,
+                "message": "isAdmin 填寫未符合規則（請填入布林格式，例：true 或 false）"
+            });
+            return;
+        }
+
+        // 驗證 userId 存在
+        const userRepo = dataSource.getRepository("User");
+        const user = await userRepo.findOne({
+            where: { "id": userId }
+        })
+        if (!user) {
+            res.status(404).json({
+                "status": false,
+                "message": "找不到該用戶"
+            })
+            return;
+        }
+
+        // 驗證欲更新的資料與資料庫不同
+        if (user.name === name
+         && user.gender === gender
+         && user.phone === phone
+         && user.birth_date === birthDate
+         && user.address === address
+         && user.role === role
+         && user.is_active === isActive
+         && user.is_admin === isAdmin) {
+            res.status(200).json({
+                "status": true,
+                "message": "您輸入的個人資訊未變更，無需更新"
+            })
+            return;
+        }
+
+        // 欲更新的資料寫入資料表
+        user.name = name;
+        user.gender = gender ? gender : user.gender;
+        user.phone = phone ? phone : user.phone;
+        user.birth_date = birthDate ? birthDate : user.birth_date;
+        user.address = address ? address : user.address;
+        user.role = role;
+        user.is_active = isActive;
+        user.is_admin = isAdmin;
+        await userRepo.save(user);
         res.status(200).json({
             "status": true,
             "message": "特定用戶資訊更新成功",
-            // "data": {
-            //     "name": "jack_updated",
-            //     "gender": "male",
-            //     "email": "jack@example.com",
-            //     "phone": "0987654321",
-            //     "birthDate": "1992-08-20",
-            //     "address": "台南市東區中華東路100號",
-            //     "role": "customer",
-            //     "isActive": true,
-            //     "isAdmin": false,
-            //     "updatedAt": "2024-04-12T08:30:00Z",
-            //     "createdAt": "2024-04-12T08:30:00Z"
-            // }
         });
+        // 要再去修正 products (post, put) of API
     } catch (error) {
         logger.error("更新特定用戶資訊失敗:", error);
         next(error);
@@ -315,20 +413,20 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
 // 取得特定用戶的詳細資訊
 router.get("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
-        const {userId} = req.params;
+        const { userId } = req.params;
 
-        if (!validator.isUUID(userId)){
+        if (!validator.isUUID(userId)) {
             res.status(400).json({
                 "status": false,
                 "message": "請填寫有效的 userId"
             });
             return;
         }
-        
+
         const user = await dataSource.getRepository("User").findOne({
-            where:{"id": userId}
+            where: { "id": userId }
         });
-        if(!user){
+        if (!user) {
             res.status(404).json({
                 "status": false,
                 "message": "找不到該用戶"
@@ -403,29 +501,31 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         // 驗證商品資訊有變更
         // 將使用者輸入的資料更新至資料庫
         const { productId = null } = req.params; // 若使用者沒填，就設為 null，避免變成 undefined
-        const { title = null,
+        const {
+            title = null,               // 必填 1
             author = null,
             illustrator = null,
             publisher = null,
             isbn = null,
             description = null,
             introductionHtml = null,
-            isVisible = null,
-            price = null,
+            isVisible = null,           // 必填 2
+            price = null,               // 必填 3
             discountPrice = null,
-            stockQuantity = null,
+            stockQuantity = null,       // 必填 4
             pageCount = null,
             publishDate = null,
-            ageRangeId = null,
-            categoryId = null,
+            ageRangeId = null,          // 必填 5
+            categoryId = null,          // 必填 6
             isNewArrival = null,
             isBestseller = null,
-            isDiscount = null } = req.body;
+            isDiscount = null
+        } = req.body;
 
         // 驗證使用者輸入的為有效資料
         if (!productId
             || !title
-            || !isVisible
+            || isVisible === null
             || !price
             || !stockQuantity
             || !ageRangeId
