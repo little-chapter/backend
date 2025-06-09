@@ -107,7 +107,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         const {orderNumber} = req.params;
         if(!id || isNotValidString(id) || !isUUID(id) || !orderNumber || isNotValidString(orderNumber)){
             res.status(400).json({
-                status: true,
+                status: false,
                 message: "欄位資料格式不符"
             })
             return
@@ -118,7 +118,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         });
         if(!existOrder){
             res.status(404).json({
-                status: true,
+                status: false,
                 message: "找不到該訂單"
             })
             return
@@ -126,7 +126,7 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         const items = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .innerJoin("orderItems.Products", "products")
-            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id")
+            .leftJoin("ProductImages", "image", "image.product_id = orderItems.product_id AND image.is_primary =:isPrimary", {isPrimary: true})
             .select([
                 "orderItems.product_id AS id",
                 "orderItems.product_title AS title",
@@ -136,7 +136,6 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
                 "image.image_url AS image_url"
             ])
             .where("orderItems.order_id =:orderId", {orderId: existOrder.id})
-            .andWhere("image.is_primary =:isPrimary", {isPrimary: true})
             .getRawMany();
         const itemsResult = items.map(item =>{
             return {
