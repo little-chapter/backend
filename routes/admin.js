@@ -1976,4 +1976,149 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         next(error);
     }
 })
+//取得專區候選商品
+router.get("recommendations/candidateBooks", async(req, res, next)=>{
+    try{}catch(error){
+        logger.error('取得專區候選商品錯誤:', error);
+        next(error);
+    }
+})
+//取得專區商品列表
+router.get("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const {sectionId} = req.params;
+        const filters = req.query;
+        const allowedFilters = {
+            isActive: "boolean",
+            page: "number",
+            limit: "number",
+        }
+        let page = 1;
+        let limit = 5;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        for(const key of Object.keys(filters)){
+            if(!(key in allowedFilters)){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料格式不符"
+                })
+                return
+            }
+            const expectedType = allowedFilters[key];
+            const value = filters[key];
+            if(expectedType === "number"){
+                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+            if(expectedType === "boolean"){
+                if(!value || !isBoolean(value)){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        let productsQuery = dataSource.getRepository("RecommendationProducts")
+            .createQueryBuilder("rp")
+            .innerJoin("rp.Products", "products")
+            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", {isPrimary: true})
+            .select([
+                "rp.product_id AS id",
+                "products.title AS title",
+                "image.image_url AS image_url",
+                "rp.display_order AS display_order",
+                "rp.is_active AS is_active"
+            ])
+            .where("rp.section_id =:sectionId", {sectionId: sectionId})
+        if(filters.isActive){
+            productsQuery = productsQuery
+                .andWhere("rp.is_active =:isActive", {isActive: filters.isActive})
+        }
+        const countQuery = productsQuery.clone(); 
+        const count = await countQuery.getCount();
+        if(filters.page && Number(filters.page) > 1){
+            page = Number(filters.page)
+        }
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
+        }
+        const totalPages = Math.max(1, Math.ceil(count / limit));
+        if(page > totalPages){
+            page = totalPages
+        }
+        const skip = (page - 1) * limit;
+        const productsData = await productsQuery
+            .orderBy("rp.display_order", "ASC")
+            .offset(skip)
+            .limit(limit)
+            .getRawMany();
+        const productsResult = productsData.map(data =>{
+            return {
+                id: data.id,
+                title: data.title,
+                productImage: data.image_url,
+                displayOrder: data.display_order,
+                isActive: data.is_active
+            }
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                pagination: {
+                    page: page,
+                    limit: limit,
+                    totalItems: count,
+                    totalPages: totalPages
+                },
+                books: productsResult
+            }
+        })
+    }catch(error){
+        logger.error('取得專區商品列表錯誤:', error);
+        next(error);
+    }
+})
+//新增專區商品
+router.post("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{}catch(error){
+        logger.error('新增專區商品錯誤:', error);
+        next(error);
+    }
+})
+//更新專區商品
+router.put("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{}catch(error){
+        logger.error('更新專區商品錯誤:', error);
+        next(error);
+    }
+})
+//刪除專區商品
+router.delete("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{}catch(error){
+        logger.error('更新專區商品錯誤:', error);
+        next(error);
+    }
+})
+
 module.exports = router;
