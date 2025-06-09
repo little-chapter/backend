@@ -11,7 +11,6 @@ const {
 const { verifyToken, verifyAdmin } = require("../middlewares/auth");
 const { Not } = require("typeorm");
 const validator = require("validator");
-const { default: isBoolean } = require("validator/lib/isBoolean");
 
 function formatDateToYYYYMMDD(dateString) {
     const date = new Date(dateString);
@@ -19,11 +18,6 @@ function formatDateToYYYYMMDD(dateString) {
     const month = String(date.getMonth() + 1).padStart(2, "0"); // 月份從 0 開始，所以要 + 1，並補零
     const day = String(date.getDate()).padStart(2, "0"); // 補零
     return `${year}-${month}-${day}`;
-}
-function toBoolean(value) {
-    if (value === "true" || value === true) return true;
-    if (value === "false" || value === false) return false;
-    return false;
 }
 
 // 取得後台首頁的銷售統計
@@ -221,7 +215,7 @@ router.get("/task", verifyToken, verifyAdmin, async (req, res, next) => {
     }
 });
 
-// 取得所有用戶的列表
+// 取得所有用戶的列表 developing
 router.get("/users", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const {
@@ -265,17 +259,17 @@ router.get("/users", verifyToken, verifyAdmin, async (req, res, next) => {
 
 // 更新特定用戶的資訊
 router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
-    try {
+    try {        
         const { userId } = req.params;
         const {
-            name = null,        // 必填
+            name = null,
             gender = null,
             phone = null,
             birthDate = null,
             address = null,
-            role = null,        // 必填
-            isActive = null,    // 必填
-            isAdmin = null      // 必填
+            role = null,        // 必填 1
+            isActive = null,    // 必填 2
+            isAdmin = null      // 必填 3
         } = req.body;
 
         // 驗證使用者輸入的為有效資料
@@ -286,19 +280,23 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             });
             return;
         }
-        if (!name || !role || isActive === null || isAdmin === null) {
+        if (role === null
+            || isActive === null
+            || isAdmin === null) {
             res.status(400).json({
                 "status": false,
-                "message": "有必填欄位未填寫（name, role, isActive, isAdmin）"
+                "message": "有必填欄位未填寫（role, isActive, isAdmin）"
             });
             return;
         }
-        if (isNotValidString(name) || name.length > 50) {
-            res.status(400).json({
-                "status": false,
-                "message": "name 填寫未符合規則（最多 50 個字元，不能空白）"
-            });
-            return;
+        if(name){
+            if (isNotValidString(name) || name.length > 50) {
+                res.status(400).json({
+                    "status": false,
+                    "message": "name 填寫未符合規則（最多 50 個字元，不能空白）"
+                });
+                return;
+            }
         }
         if (gender) {
             if (gender !== "female" && gender !== "male") {
@@ -327,7 +325,6 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
                 return;
             }
         }
-console.log("address.length: ",address.length);       // 地址長度ＧＧ＝＝  
         if (address) {
             if (isNotValidString(address) || address.length < 10 || address.length > 50) {
                 res.status(400).json({
@@ -344,15 +341,14 @@ console.log("address.length: ",address.length);       // 地址長度ＧＧ＝�
             });
             return;
         }
-
-        if (!typeof isActive === "boolean") {
+        if (typeof isActive !== "boolean") {
             res.status(400).json({
                 "status": false,
                 "message": "isActive 填寫未符合規則（請填入布林格式，例：true 或 false）"
             });
             return;
         }
-        if (!typeof isAdmin === "boolean") {
+        if (typeof isAdmin !== "boolean") {
             res.status(400).json({
                 "status": false,
                 "message": "isAdmin 填寫未符合規則（請填入布林格式，例：true 或 false）"
@@ -374,23 +370,23 @@ console.log("address.length: ",address.length);       // 地址長度ＧＧ＝�
         }
 
         // 驗證欲更新的資料與資料庫不同
-        if (user.name === name
-         && user.gender === gender
-         && user.phone === phone
-         && user.birth_date === birthDate
-         && user.address === address
-         && user.role === role
-         && user.is_active === isActive
-         && user.is_admin === isAdmin) {
+        if (user.name === (name ? name : user.name)
+            && user.gender === (gender ? gender : user.gender)
+            && user.phone === (phone ? phone : user.phone)
+            && user.birth_date === (birthDate ? birthDate : user.birth_date)
+            && user.address === (address ? address : user.address)
+            && user.role === role
+            && user.is_active === isActive
+            && user.is_admin === isAdmin) {
             res.status(200).json({
                 "status": true,
-                "message": "您輸入的個人資訊未變更，無需更新"
+                "message": "您輸入的用戶資訊未變更，無需更新"
             })
             return;
         }
 
         // 欲更新的資料寫入資料表
-        user.name = name;
+        user.name = name ? name : user.name;
         user.gender = gender ? gender : user.gender;
         user.phone = phone ? phone : user.phone;
         user.birth_date = birthDate ? birthDate : user.birth_date;
@@ -398,12 +394,13 @@ console.log("address.length: ",address.length);       // 地址長度ＧＧ＝�
         user.role = role;
         user.is_active = isActive;
         user.is_admin = isAdmin;
+        user.updated_at = new Date();
         await userRepo.save(user);
+
         res.status(200).json({
             "status": true,
             "message": "特定用戶資訊更新成功",
         });
-        // 要再去修正 products (post, put) of API
     } catch (error) {
         logger.error("更新特定用戶資訊失敗:", error);
         next(error);
@@ -438,11 +435,11 @@ router.get("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             "status": true,
             "message": "特定用戶詳細資訊取得成功",
             "data": {
-                "name": user.name,
+                "name": user.name || null,
                 "gender": user.gender || null,
-                "email": user.email,
+                "email": user.email || null,
                 "phone": user.phone || null,
-                "birthDate": user.birthDate || null,
+                "birthDate": user.birth_date || null,
                 "role": user.role,
                 "isActive": user.is_active,
                 "isAdmin": user.is_admin,
@@ -479,6 +476,17 @@ router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res,
                 "message": "找不到此商品"
             });
         }
+        const rProducts = dataSource.getRepository("RecommendationProducts");
+        const rProduct = await rProducts.findOne({
+            where:{"product_id": productId}
+        });
+        if(rProduct){
+            res.status(409).json({
+                "status": false,
+                "message": "必須先將該商品從推薦清單中刪除才能刪除它"
+            });
+        }
+        
         await productsRepo.remove(product);
 
         res.status(200).json({
@@ -500,7 +508,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         // 驗證 isbn 與資料庫的不重複
         // 驗證商品資訊有變更
         // 將使用者輸入的資料更新至資料庫
-        const { productId = null } = req.params; // 若使用者沒填，就設為 null，避免變成 undefined
+        const { productId } = req.params;
         const {
             title = null,               // 必填 1
             author = null,
@@ -523,20 +531,19 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         } = req.body;
 
         // 驗證使用者輸入的為有效資料
-        if (!productId
-            || !title
+        if (productId === null
+            || title === null
             || isVisible === null
-            || !price
-            || !stockQuantity
-            || !ageRangeId
-            || !categoryId) {
+            || price === null
+            || stockQuantity === null
+            || ageRangeId === null
+            || categoryId === null) {
             res.status(400).json({
                 "status": false,
                 "message": "必填欄位未填寫（productId, title, isVisible, price, stockQuantity, ageRangeId, categoryId）"
             });
             return;
         }
-
         if (isNotValidInteger(Number(productId)) || Number.isNaN(Number(productId))) {
             res.status(400).json({
                 "status": false,
@@ -544,14 +551,12 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             });
             return;
         }
-        if (title) {
-            if (isNotValidString(title) || title.length < 3 || title.length > 50) {
-                res.status(400).json({
-                    "status": false,
-                    "message": "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
-                });
-                return;
-            }
+        if (isNotValidString(title) || title.length < 3 || title.length > 50) {
+            res.status(400).json({
+                "status": false,
+                "message": "title 填寫未符合規則（至少 3 個字元，最多 50 字元）",
+            });
+            return;
         }
         if (author) {
             if (isNotValidString(author) || author.length < 2 || author.length > 50) {
@@ -605,7 +610,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 return;
             }
         }
-        if (!isBoolean(isVisible)) {
+        if (typeof isVisible !== "boolean") {
             res.status(400).json({
                 "status": false,
                 "message": "isVisible 必須為布林格式"
@@ -640,19 +645,19 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             });
             return;
         }
-        if (!validator.isDate(publishDate)) {
+        if (publishDate && !validator.isDate(publishDate)) {
             res.status(400).json({
                 "status": false,
                 "message": "publishDate 必須為有效的日期格式"
             });
             return;
         }
-        if (!isBoolean(isNewArrival)
-            || !isBoolean(isBestseller)
-            || !isBoolean(isDiscount)) {
+        if (typeof isNewArrival !== "boolean"
+            || typeof isBestseller !== "boolean"
+            || typeof isDiscount !== "boolean") {
             res.status(400).json({
                 "status": false,
-                "message": "布林欄位格式錯誤（例如 isNewArrival, isBestseller, isDiscount）"
+                "message": "必須為布林格式（例如 isNewArrival, isBestseller, isDiscount）"
             });
             return;
         }
@@ -695,10 +700,10 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             return;
         }
         const categoriesRepo = dataSource.getRepository("Categories");
-        const findcategories = await categoriesRepo.findOne({
+        const findCategories = await categoriesRepo.findOne({
             where: { "id": categoryId }
         });
-        if (!findcategories) {
+        if (!findCategories) {
             res.status(404).json({
                 "status": false,
                 "message": "找不到此主題分類",
@@ -721,24 +726,24 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         }
 
         // 驗證商品資訊有變更
-        if (findProduct.title === (title ? title : findProduct.title)
+        if (findProduct.title === title
             && findProduct.author === (author ? author : findProduct.author)
             && findProduct.illustrator === (illustrator ? illustrator : findProduct.illustrator)
             && findProduct.publisher === (publisher ? publisher : findProduct.publisher)
             && findProduct.isbn === (isbn ? isbn : findProduct.isbn)
             && findProduct.description === (description ? description : findProduct.description)
             && findProduct.introduction_html === (introductionHtml ? introductionHtml : findProduct.introduction_html)
-            && findProduct.is_visible === (isVisible ? toBoolean(isVisible) : findProduct.is_visible)
-            && findProduct.price === (price ? Number(price).toFixed(2) : findProduct.price)
+            && findProduct.is_visible === isVisible
+            && findProduct.price === Number(price).toFixed(2)
             && findProduct.discount_price === (discountPrice ? Number(discountPrice).toFixed(2) : findProduct.discount_price)
-            && findProduct.stock_quantity === (stockQuantity ? Number(stockQuantity) : findProduct.stock_quantity)
+            && findProduct.stock_quantity === Number(stockQuantity)
             && findProduct.page_count === (pageCount ? Number(pageCount) : findProduct.page_count)
             && findProduct.publish_date === (publishDate ? publishDate : findProduct.publish_date)
-            && findProduct.age_range_id === (ageRangeId ? Number(ageRangeId) : findProduct.age_range_id)
-            && findProduct.category_id === (categoryId ? Number(categoryId) : findProduct.category_id)
-            && findProduct.is_new_arrival === (isNewArrival ? toBoolean(isNewArrival) : findProduct.is_new_arrival)
-            && findProduct.is_bestseller === (isBestseller ? toBoolean(isBestseller) : findProduct.is_bestseller)
-            && findProduct.is_discount === (isDiscount ? toBoolean(isDiscount) : findProduct.is_discount)) {
+            && findProduct.age_range_id === Number(ageRangeId)
+            && findProduct.category_id === Number(categoryId)
+            && findProduct.is_new_arrival === (isNewArrival ? isNewArrival : findProduct.is_new_arrival)
+            && findProduct.is_bestseller === (isBestseller ? isBestseller : findProduct.is_bestseller)
+            && findProduct.is_discount === (isDiscount ? isDiscount : findProduct.is_discount)) {
             res.status(200).json({
                 "message": "您輸入的商品資訊未變更，無需更新"
             });
@@ -749,12 +754,12 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         const updateProduct = await productsRepo.update(
             { "id": productId },
             {
-                "title": title ? title : findProduct.title,
-                "is_visible": toBoolean(isVisible),
-                "price": price ? Number(price) : findProduct.price,
-                "stock_quantity": stockQuantity ? Number(stockQuantity) : findProduct.stock_quantity,
-                "age_range_id": ageRangeId ? Number(ageRangeId) : findProduct.age_range_id,
-                "category_id": categoryId ? Number(categoryId) : findProduct.category_id,
+                title,
+                "is_visible": isVisible,
+                "price": Number(price),
+                "stock_quantity": Number(stockQuantity),
+                "age_range_id": Number(ageRangeId),
+                "category_id": Number(categoryId),
                 "author": author ? author : findProduct.author,
                 "illustrator": illustrator ? illustrator : findProduct.illustrator,
                 "publisher": publisher ? publisher : findProduct.publisher,
@@ -764,9 +769,9 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 "discount_price": discountPrice ? discountPrice : findProduct.discount_price,
                 "page_count": pageCount ? pageCount : findProduct.page_count,
                 "publish_date": publishDate ? publishDate : findProduct.publish_date,
-                "is_new_arrival": toBoolean(isNewArrival),
-                "is_bestseller": toBoolean(isBestseller),
-                "is_discount": toBoolean(isDiscount),
+                "is_new_arrival": isNewArrival,
+                "is_bestseller": isBestseller,
+                "is_discount": isDiscount,
                 "updated_at": new Date()
             });
         res.status(200).json({
@@ -787,32 +792,34 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
         // 驗證使用者輸入的為有效資料（必填、非必填欄位） 這邊被「undefined」、「短路運算」與「型別轉換」的概念卡了半天..
         // 驗證 isbn 不能重複，因為資料庫定義該欄為唯一值
         // 將使用者輸入的資料寫入資料庫
-        const { title,
-            author,
-            illustrator,
-            publisher,
-            isbn,
-            description,
-            introductionHtml,
-            isVisible,
-            price,
-            discountPrice,
-            stockQuantity,
-            pageCount,
-            publishDate,
-            ageRangeId,
-            categoryId,
-            isNewArrival,
-            isBestseller,
-            isDiscount } = req.body;
+        const {
+            title = null,
+            author = null,
+            illustrator = null,
+            publisher = null,
+            isbn = null,
+            description = null,
+            introductionHtml = null,
+            isVisible = null,
+            price = null,
+            discountPrice = null,
+            stockQuantity = null,
+            pageCount = null,
+            publishDate = null,
+            ageRangeId = null,
+            categoryId = null,
+            isNewArrival = null,
+            isBestseller = null,
+            isDiscount = null
+        } = req.body;
 
         // 驗證使用者輸入的為有效資料
-        if (!title
-            || isVisible === undefined
-            || price === undefined
-            || stockQuantity === undefined
-            || !ageRangeId
-            || !categoryId) {
+        if (title === null
+            || isVisible === null
+            || price === null
+            || stockQuantity === null
+            || ageRangeId === null
+            || categoryId === null) {
             res.status(400).json({
                 "status": false,
                 "message": "必填欄位未填寫（title, isVisible, price, stockQuantity, ageRangeId, categoryId）"
@@ -826,7 +833,7 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             });
             return;
         }
-        if (isVisible && !isBoolean(isVisible)) {
+        if (typeof isVisible !== "boolean") {
             res.status(400).json({
                 "status": false,
                 "message": "isVisible 必須為布林格式",
@@ -873,10 +880,10 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             return;
         }
         const categoriesRepo = dataSource.getRepository("Categories");
-        const findcategories = await categoriesRepo.findOne({
+        const findCategories = await categoriesRepo.findOne({
             where: { "id": categoryId }
         });
-        if (!findcategories) {
+        if (!findCategories) {
             res.status(404).json({
                 "status": false,
                 "message": "找不到此主題分類",
@@ -910,7 +917,7 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
                 return;
             }
         }
-        if (isbn && !validator.isISBN(isbn)) {
+        if (!validator.isISBN(isbn)) {
             res.status(400).json({
                 "status": false,
                 "message": "isbn 必須為有效的 ISBN 格式"
@@ -956,9 +963,9 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             });
             return;
         }
-        if (isNewArrival !== undefined && !isBoolean(isNewArrival)
-            || isBestseller !== undefined && !isBoolean(isBestseller)
-            || isDiscount !== undefined && !isBoolean(isDiscount)) {
+        if (typeof isNewArrival !== "boolean"
+            || typeof isBestseller !== "boolean"
+            || typeof isDiscount !== "boolean") {
             res.status(400).json({
                 "status": false,
                 "message": "布林欄位格式錯誤（例如 isNewArrival, isBestseller, isDiscount）"
@@ -984,7 +991,7 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
         // 將使用者輸入的資料寫入資料庫
         const createProduct = productsRepo.create({
             title,
-            "is_visible": toBoolean(isVisible),
+            "is_visible": isVisible,
             "price": Number(price),
             "stock_quantity": Number(stockQuantity),
             "age_range_id": Number(ageRangeId),
@@ -998,9 +1005,9 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             "discount_price": discountPrice ? discountPrice : null,
             "page_count": pageCount ? pageCount : null,
             "publish_date": publishDate ? publishDate : null,
-            "is_new_arrival": toBoolean(isNewArrival),
-            "is_bestseller": toBoolean(isBestseller),
-            "is_discount": toBoolean(isDiscount)
+            "is_new_arrival": isNewArrival,
+            "is_bestseller": isBestseller,
+            "is_discount": isDiscount
         });
         await productsRepo.save(createProduct);
         res.status(201).json({
