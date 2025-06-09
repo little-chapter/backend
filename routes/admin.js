@@ -2171,7 +2171,65 @@ router.post("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, 
 })
 //更新專區商品
 router.put("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{}catch(error){
+    try{
+        const {sectionId, productId} = req.params;
+        const {displayOrder, isActive} = req.body;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+        !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId))) ||
+        !displayOrder || isNotValidInteger(Number(displayOrder) || Number.isNaN(Number(displayOrder))) ||
+        typeof isActive !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: productId});
+        if(!existRecommendationProduct){
+            res.status(404).json({
+                status: false,
+                message: "該推薦專區無此商品"
+            })
+            return
+        }
+        if(existRecommendationProduct.display_order === displayOrder && existRecommendationProduct.is_active === isActive){
+            res.status(200).json({
+                status: true,
+                message: "未變更專區商品資料"
+            })
+            return
+        }
+        await dataSource
+            .createQueryBuilder()
+            .update("RecommendationProducts")
+            .set({
+                display_order: displayOrder,
+                is_active: isActive
+            })
+            .where("section_id =:sectionId", {sectionId})
+            .andWhere("product_id =:productId", {productId})
+            .execute();
+        res.status(200).json({
+            status: true,
+            message: "更新專區商品成功"
+        })
+    }catch(error){
         logger.error('更新專區商品錯誤:', error);
         next(error);
     }
