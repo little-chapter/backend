@@ -11,6 +11,8 @@ const {
 const { verifyToken, verifyAdmin } = require("../middlewares/auth");
 const { Not } = require("typeorm");
 const validator = require("validator");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 function formatDateToYYYYMMDD(dateString) {
     const date = new Date(dateString);
@@ -55,7 +57,6 @@ router.get("/dashboard", verifyToken, verifyAdmin, async (req, res, next) => {
                 .where('pt.status = :status', { status: 'SUCCESS' })
                 .andWhere('pt.payment_time >= :startDate AND pt.payment_time < :endDate', { startDate, endDate })
                 .getRawOne();
-            // console.log("result:", result);
             return parseFloat(result.total);
 
         };
@@ -289,7 +290,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             });
             return;
         }
-        if(name){
+        if(name !== null){
             if (isNotValidString(name) || name.length > 50) {
                 res.status(400).json({
                     "status": false,
@@ -298,7 +299,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
                 return;
             }
         }
-        if (gender) {
+        if (gender !== null) {
             if (gender !== "female" && gender !== "male") {
                 res.status(400).json({
                     "status": false,
@@ -307,7 +308,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
                 return;
             }
         }
-        if (phone) {
+        if (phone !== null) {
             if (!validator.isMobilePhone(phone, "zh-TW")) {
                 res.status(400).json({
                     "status": false,
@@ -316,7 +317,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
                 return;
             }
         }
-        if (birthDate) {
+        if (birthDate !== null) {
             if (!validator.isDate(birthDate)) {
                 res.status(400).json({
                     "status": false,
@@ -325,7 +326,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
                 return;
             }
         }
-        if (address) {
+        if (address !== null) {
             if (isNotValidString(address) || address.length < 10 || address.length > 50) {
                 res.status(400).json({
                     "status": false,
@@ -352,6 +353,20 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             res.status(400).json({
                 "status": false,
                 "message": "isAdmin 填寫未符合規則（請填入布林格式，例：true 或 false）"
+            });
+            return;
+        }
+        if(role === "admin" && isAdmin === false){
+            res.status(400).json({
+                "status": false,
+                "message": "當 role 為 admin 時，isAdmin 也必須為 true"
+            });
+            return;
+        }
+        if(role === "customer" && isAdmin === true){
+            res.status(400).json({
+                "status": false,
+                "message": "當 role 為 customer 時，isAdmin 也必須為 false"
             });
             return;
         }
@@ -464,6 +479,7 @@ router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res,
                 "status": true,
                 "message": "請輸入有效的 productId"
             });
+            return;
         }
 
         const productsRepo = dataSource.getRepository("Products");
@@ -475,19 +491,19 @@ router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res,
                 "status": true,
                 "message": "找不到此商品"
             });
+            return;
         }
-        const rProducts = dataSource.getRepository("RecommendationProducts");
-        const rProduct = await rProducts.findOne({
-            where:{"product_id": productId}
-        });
-        if(rProduct){
-            res.status(409).json({
-                "status": false,
-                "message": "必須先將該商品從推薦清單中刪除才能刪除它"
+        if(product.is_visible === false){
+            res.status(200).json({
+                "status": true,
+                "message": "此商品原本就已下架，無需刪除"
             });
+            return;
         }
-        
-        await productsRepo.remove(product);
+
+        product.is_visible = false;
+        product.updated_at = new Date();
+        await productsRepo.save(product);
 
         res.status(200).json({
             "status": true,
@@ -558,7 +574,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             });
             return;
         }
-        if (author) {
+        if (author !== null) {
             if (isNotValidString(author) || author.length < 2 || author.length > 50) {
                 res.status(400).json({
                     "status": false,
@@ -567,7 +583,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 return;
             }
         }
-        if (illustrator) {
+        if (illustrator !== null) {
             if (isNotValidString(illustrator) || illustrator.length < 2 || illustrator.length > 50) {
                 res.status(400).json({
                     "status": false,
@@ -576,7 +592,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 return;
             }
         }
-        if (publisher) {
+        if (publisher !== null) {
             if (isNotValidString(publisher) || publisher.length < 4 || publisher.length > 200) {
                 res.status(400).json({
                     "status": false,
@@ -592,7 +608,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             });
             return;
         }
-        if (description) {
+        if (description !== null) {
             if (isNotValidString(description) || description.length < 3 || description.length > 200) {
                 res.status(400).json({
                     "status": false,
@@ -601,7 +617,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 return;
             }
         }
-        if (introductionHtml) {
+        if (introductionHtml !== null) {
             if (isNotValidString(introductionHtml) || introductionHtml.length < 3 || introductionHtml.length > 200) {
                 res.status(400).json({
                     "status": false,
@@ -1020,12 +1036,6 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
     }
 });
 
-// 
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-// 
-
-
 // 管理者登入
 router.post("/log-in", async (req, res) => {
     try {
@@ -1085,7 +1095,6 @@ router.post("/log-in", async (req, res) => {
             email: user.email,
             role: user.role,
         };
-        console.log(`payload: ${payload}`);
 
         const expiresInSeconds = 86400; // 1 天
         const token = jwt.sign(payload, process.env.JWT_SECRET, {
@@ -1574,6 +1583,7 @@ router.delete(
     }
 );
 
+// 取得訂單列表
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const allowedFilters = {
@@ -1826,6 +1836,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
     }
 });
 
+// 取得指定訂單詳細資料
 router.get(
     "/orders/:orderNumber",
     verifyToken,
@@ -1936,7 +1947,7 @@ router.get(
     }
 );
 
-//更新訂單狀態
+// 更新訂單狀態
 router.put(
     "/orders/:orderNumber/status",
     verifyToken,
@@ -2029,6 +2040,8 @@ router.put(
         }
     }
 );
+
+// 管理者取得商品列表
 router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         let filters = req.query;
@@ -2167,6 +2180,8 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
         next(error);
     }
 })
+
+// 管理者取得指定商品詳細資料
 router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const { productId } = req.params;
