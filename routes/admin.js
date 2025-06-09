@@ -2101,7 +2101,70 @@ router.get("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, r
 })
 //新增專區商品
 router.post("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{}catch(error){
+    try{
+        const {sectionId} = req.params;
+        const {id, displayOrder, isActive} = req.body;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+        !id || isNotValidInteger(Number(id) || Number.isNaN(Number(id)))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(displayOrder && (isNotValidInteger(Number(id)) || Number.isNaN(Number(id)))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(isActive && typeof isActive !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products").findOneBy({id});
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: id});
+        if(existRecommendationProduct){
+            res.status(409).json({
+                status: false,
+                message: "該推薦專區已有此商品"
+            })
+            return
+        }
+        await dataSource.getRepository("RecommendationProducts")
+            .createQueryBuilder("rp")
+            .insert()
+            .values({
+                section_id: Number(sectionId),
+                product_id: Number(id),
+                display_order: displayOrder || 1,
+                is_active: isActive === false ?  isActive : true
+            })
+            .execute();
+        res.status(200).json({
+            status: true,
+            message: "新增專區商品成功"
+        })
+    }catch(error){
         logger.error('新增專區商品錯誤:', error);
         next(error);
     }
