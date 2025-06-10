@@ -1977,14 +1977,164 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
     }
 })
 //取得專區候選商品
-router.get("recommendations/candidateBooks", async(req, res, next)=>{
-    try{}catch(error){
+router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next)=>{
+    try{
+        let {sectionId} = req.params;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+            console.log(sectionId, isNotValidInteger(Number(sectionId)), Number.isNaN(Number(sectionId)))
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        //有效商品銷量排行
+        const validSales = await dataSource.getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .innerJoin("orderItems.Orders", "orders")
+            .select([
+                "orderItems.product_id AS id",
+                "SUM(orderItems.quantity) AS sales",
+            ])
+            .where("orders.order_status =:orderStatus", {orderStatus: "completed"})
+            .andWhere("orders.payment_status =:paymentStatus", {paymentStatus: "paid"})
+            .andWhere("orders.shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+            .groupBy("orderItems.product_id")
+            .orderBy("SUM(orderItems.quantity)", "DESC")
+            .getRawMany();
+        sectionId = Number(sectionId);
+        //熱門書籍
+        if(sectionId === 1){
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .getRawMany();
+            //forEach有效銷售排行 且 商品須為上架
+            const result = []
+            validSales.forEach(item =>{
+                const productId = item.id;
+                const product = productsData.find(data =>{
+                    return data.id === productId
+                })
+                if(product){
+                    result.push({
+                        id: item.id,
+                        title: product.title,
+                        sales: item.sales,
+                        publisedAt: formatDateToYYYYMMDD(product.publish_at),
+                        isBundle: product.is_bundle
+                    })
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: result
+            })
+        }
+        //本月亮點新書
+        if(sectionId === 2){
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .orderBy("products.publish_date", "DESC")
+                .getRawMany();
+            const result = productsData.map(item =>{
+                const productId = item.id;
+                const sales = validSales.find(data =>{
+                    return data.id === productId
+                })
+                if(sales){
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: parseInt(sales.sales),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }else{
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: 0,
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: result
+            })
+        }
+        //套裝推薦
+        if(sectionId === 3){
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .andWhere("products.is_bundle =:isBundle", {isBundle: true})
+                .orderBy("products.id", "ASC")
+                .getRawMany();
+            const result = productsData.map(item =>{
+                const productId = item.id;
+                const sales = validSales.find(data =>{
+                    return data.id === productId
+                })
+                if(sales){
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: parseInt(sales.sales),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }else{
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: 0,
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: result
+            })
+        }
+    }catch(error){
         logger.error('取得專區候選商品錯誤:', error);
         next(error);
     }
 })
 //取得專區商品列表
-router.get("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, res, next)=>{
+router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     try{
         const {sectionId} = req.params;
         const filters = req.query;
@@ -2100,7 +2250,7 @@ router.get("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, r
     }
 })
 //新增專區商品
-router.post("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, res, next)=>{
+router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
     try{
         const {sectionId} = req.params;
         const {id, displayOrder, isActive} = req.body;
@@ -2170,7 +2320,7 @@ router.post("/recommendations/:sectionId", verifyToken, verifyAdmin, async(req, 
     }
 })
 //更新專區商品
-router.put("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+router.put("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
     try{
         const {sectionId, productId} = req.params;
         const {displayOrder, isActive} = req.body;
@@ -2235,7 +2385,7 @@ router.put("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, a
     }
 })
 //刪除專區商品
-router.delete("/recommendations/:sectionId/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+router.delete("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
     try{
         const {sectionId, productId} = req.params;
         if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
