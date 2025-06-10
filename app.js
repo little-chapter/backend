@@ -16,6 +16,7 @@ const uploadProductRouter = require("./routes/uploadProduct");
 const wishlistRouter = require("./routes/wishlist");
 const notificationRouter = require("./routes/notifications");
 const discountCodeRouter = require("./routes/discountCodes");
+const searchRouter = require("./routes/search");
 
 const app = express();
 app.use(cors());
@@ -46,6 +47,7 @@ app.use("/api/admin/products", uploadProductRouter);
 app.use("/api/wishlist", wishlistRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/discountCodes", discountCodeRouter);
+app.use("/api/search", searchRouter);
 
 app.use((req, res, next) => {
   res.status(404).json({
