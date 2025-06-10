@@ -2165,7 +2165,7 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
             if(!(key in allowedFilters)){
                 res.status(400).json({
                     status: false,
-                    message: "欄位資料格式不符"
+                    message: "不允許的搜尋條件"
                 })
                 return
             }
