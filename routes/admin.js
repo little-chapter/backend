@@ -1977,11 +1977,10 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
     }
 })
 //取得專區候選商品
-router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next)=>{
+router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyAdmin, async(req, res, next)=>{
     try{
         let {sectionId} = req.params;
         if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
-            console.log(sectionId, isNotValidInteger(Number(sectionId)), Number.isNaN(Number(sectionId)))
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
@@ -1996,7 +1995,7 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
             })
             return
         }
-        //有效商品銷量排行
+        //商品銷量排行
         const validSales = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .innerJoin("orderItems.Orders", "orders")
@@ -2013,6 +2012,7 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
         sectionId = Number(sectionId);
         //熱門書籍
         if(sectionId === 1){
+            //上架商品
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
@@ -2023,8 +2023,8 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
                 ])
                 .where("products.is_visible =:isVisible", {isVisible: true})
                 .getRawMany();
-            //forEach有效銷售排行 且 商品須為上架
-            const result = []
+            //有效銷售排行 且 商品須為上架
+            const result = [];
             validSales.forEach(item =>{
                 const productId = item.id;
                 const product = productsData.find(data =>{
@@ -2034,7 +2034,7 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
                     result.push({
                         id: item.id,
                         title: product.title,
-                        sales: item.sales,
+                        sales: parseInt(item.sales),
                         publisedAt: formatDateToYYYYMMDD(product.publish_at),
                         isBundle: product.is_bundle
                     })
@@ -2042,7 +2042,10 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
             })
             res.status(200).json({
                 status: true,
-                data: result
+                data: {
+                    sectionName: "熱門書籍",
+                    products: result
+                }
             })
         }
         //本月亮點新書
@@ -2083,7 +2086,10 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
             })
             res.status(200).json({
                 status: true,
-                data: result
+                data: {
+                    sectionName: "本月亮點新書",
+                    products: result
+                }
             })
         }
         //套裝推薦
@@ -2125,7 +2131,10 @@ router.get("/recommendations/:sectionId/candidateProducts", async(req, res, next
             })
             res.status(200).json({
                 status: true,
-                data: result
+                data: {
+                    sectionName: "套裝推薦",
+                    products: result
+                }
             })
         }
     }catch(error){
