@@ -46,12 +46,16 @@ router.get("/", verifyToken, async(req, res, next) =>{
             });
             return
         }
-        const ordersQuery = await dataSource.getRepository("Orders")
+        let ordersQuery =  dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
             .innerJoin("OrderItems", "orderItems", "orderItems.order_id = orders.id")
             .select([
+                "orders.id AS id",
                 "orders.order_number AS order_number",
                 "orders.created_at AS created_at",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
                 "orders.final_amount AS final_amount",
                 "orders.order_status AS order_status",
                 "orders.payment_status AS payment_status",
@@ -72,11 +76,26 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .offset(skip)
             .limit(limit)
             .getRawMany();
+        const orderIds = ordersData.map(data => data.id);
+        const transaction = await dataSource.getRepository("PaymentTransactions")
+            .createQueryBuilder("transactions")
+            .select([
+                "order_id",
+                "payment_time"
+            ])
+            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .getRawMany();
         const ordersResult = ordersData.map(order =>{
+            const id = order.id;
+            const result =transaction.find(item => item.order_id = id)
             return {
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
-                totalQuantity: order.total_quantity,
+                paidAt: result.payment_time,
+                shippedAt: order.shipped_at,
+                completedAt: order.completed_at,
+                returnAt: order.return_at,
+                totalQuantity: parseInt(order.total_quantity),
                 finalAmount: parseInt(order.final_amount),
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,

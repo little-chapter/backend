@@ -130,6 +130,10 @@ module.exports = new EntitySchema({
             type: "timestamptz",
             nullable: true,
         },
+        return_at: {
+            type: "timestamptz",
+            nullable: true,
+        },
         created_at: {
             type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
