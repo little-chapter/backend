@@ -1293,7 +1293,7 @@ router.delete(
         }
     }
 );
-
+//取得篩選訂單
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const allowedFilters = {
@@ -1310,13 +1310,15 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
             sortOrder: "string",
         };
         const allowedOrderStatus = [
-            "created",
             "pending",
             "shipped",
             "completed",
             "cancelled",
+            "returnRequested",
+            "returnAccepted",
+            "returnRejected"
         ];
-        const allowedPaymentStatus = ["unpaid", "paid", "refunded"];
+        const allowedPaymentStatus = ["unpaid", "paid", "refunded", "authorizationVoided"];
         const allowedShippingStatus = [
             "notReceived",
             "processing",
@@ -1427,6 +1429,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
             .createQueryBuilder("orders")
             .innerJoin("orders.User", "user")
             .select([
+                "orders.id AS id",
                 "orders.order_number AS order_number",
                 "user.name AS username",
                 "orders.final_amount AS final_amount",
@@ -1434,6 +1437,10 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 "orders.payment_status AS payment_status",
                 "orders.shipping_status AS shipping_status",
                 "orders.created_at AS created_at",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
+                "orders.cancelled_at AS cancelled_at",
             ]);
         //起始日期 結束日期
         if (filters.startDate && filters.endDate) {
@@ -1518,7 +1525,32 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         }
         const skip = (page - 1) * limit;
         const ordersData = await orderQuery.offset(skip).limit(limit).getRawMany();
-        const ordersResult = ordersData.map((order) => {
+        if(ordersData.length === 0){
+            res.status(200).json({
+                status: true,
+                data: {
+                    pagination: {
+                        page: page,
+                        limit: limit,
+                        totalPages: totalPages,
+                    },
+                    orders: [],
+                },
+            });
+            return
+        }
+        const orderIds = ordersData.map(data => data.id);
+        const transaction = await dataSource.getRepository("PaymentTransactions")
+            .createQueryBuilder("transactions")
+            .select([
+                "order_id",
+                "payment_time"
+            ])
+            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .getRawMany();
+        const ordersResult = ordersData.map(order => {
+            const id = order.id;
+            const result =transaction.find(item => item.order_id === id);
             return {
                 orderNumber: order.order_number,
                 userName: order.username,
@@ -1526,7 +1558,12 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
                 shippingStatus: order.shipping_status,
-                createdAt: formatDateToYYYYMMDD(order.created_at),
+                createdAt: order.created_at,
+                paidAt: result ? result.payment_time : null,
+                shippedAt: order.shipped_at,
+                completedAt: order.completed_at,
+                returnAt: order.return_at,
+                cancelledAt: order.cancelled_at,
             };
         });
         res.status(200).json({
@@ -1545,116 +1582,115 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         next(error);
     }
 });
-
-router.get(
-    "/orders/:orderNumber",
-    verifyToken,
-    verifyAdmin,
-    async (req, res, next) => {
-        try {
-            const { orderNumber } = req.params;
-            if (!orderNumber || isNotValidString(orderNumber)) {
-                res.status(400).json({
-                    status: false,
-                    message: "欄位資料格式不符",
-                });
-                return;
-            }
-            const existOrder = await dataSource
-                .getRepository("Orders")
-                .findOneBy({ order_number: orderNumber });
-            if (!existOrder) {
-                res.status(404).json({
-                    status: false,
-                    message: "找不到此訂單",
-                });
-                return;
-            }
-            const orderData = await dataSource
-                .getRepository("Orders")
-                .createQueryBuilder("orders")
-                .innerJoin(
-                    "PaymentTransactions",
-                    "pt",
-                    "pt.merchant_order_no =:merchantOrderNo",
-                    { merchantOrderNo: orderNumber }
-                )
-                .select([
-                    "orders.id AS id",
-                    "orders.order_number AS order_number",
-                    "orders.order_status AS order_status",
-                    "orders.shipping_status AS shipping_status",
-                    "orders.payment_status AS payment_status",
-                    "orders.payment_method AS payment_method",
-                    "pt.transaction_number AS transaction_number",
-                    "orders.total_amount AS total_amount",
-                    "orders.shipping_fee AS shipping_fee",
-                    "orders.discount_amount AS discount_amount",
-                    "orders.final_amount AS final_amount",
-                    "orders.note AS note",
-                    "orders.status_note AS status_note",
-                    "orders.recipient_name AS recipient_name",
-                    "orders.recipient_phone AS recipient_phone",
-                    "orders.shipping_method AS shipping_method",
-                    "orders.shipping_address AS shipping_address",
-                    "orders.store_code AS store_code",
-                    "orders.store_name AS store_name",
-                ])
-                .where("orders.order_number =:orderNumber", {
-                    orderNumber: orderNumber,
-                })
-                .getRawOne();
-            const orderItems = await dataSource
-                .getRepository("OrderItems")
-                .createQueryBuilder("orderItems")
-                .select([
-                    "orderItems.product_title AS title",
-                    "orderItems.quantity AS quantity",
-                    "orderItems.price AS price",
-                    "orderItems.subtotal AS subtotal",
-                ])
-                .where("orderItems.order_id =:orderId", { orderId: orderData.id })
-                .getRawMany();
-            const itemsResult = orderItems.map((item) => {
-                return {
-                    productTitle: item.title,
-                    quantity: item.quantity,
-                    price: parseInt(item.price),
-                    subtotal: parseInt(item.subtotal),
-                };
+//取得訂單詳細
+router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { orderNumber } = req.params;
+        if (!orderNumber || isNotValidString(orderNumber)) {
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
             });
-            res.status(200).json({
-                status: true,
-                data: {
-                    orderNumber: orderData.order_number,
-                    orderStatus: orderData.order_status,
-                    shippingStatus: orderData.shipping_status,
-                    paymentStatus: orderData.payment_status,
-                    paymentMethod: orderData.payment_method,
-                    transactionNumber: orderData.transaction_number,
-                    totalAmount: parseInt(orderData.total_amount),
-                    shippingFee: parseInt(orderData.shipping_fee),
-                    discountAmount: parseInt(orderData.discount_amount),
-                    finalAmount: parseInt(orderData.final_amount),
-                    note: orderData.note,
-                    statusNote: orderData.status_note,
-                    shippingInfo: {
-                        recipientName: orderData.recipient_name,
-                        recipientPhone: orderData.recipient_phone,
-                        shippingMethod: orderData.shipping_method,
-                        shippingAddress: orderData.shipping_address,
-                        storeCode: orderData.store_code,
-                        storeName: orderData.store_name,
-                    },
-                    items: itemsResult,
-                },
-            });
-        } catch (error) {
-            logger.error("取得用戶訂單詳細錯誤:", error);
-            next(error);
+            return;
         }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({ order_number: orderNumber });
+        if (!existOrder) {
+            res.status(404).json({
+                status: false,
+                message: "找不到此訂單",
+            });
+            return;
+        }
+        const orderData = await dataSource.getRepository("Orders")
+            .createQueryBuilder("orders")
+            .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", { merchantOrderNo: orderNumber })
+            .select([
+                "orders.id AS id",
+                "orders.order_number AS order_number",
+                "orders.order_status AS order_status",
+                "orders.shipping_status AS shipping_status",
+                "orders.payment_status AS payment_status",
+                "orders.payment_method AS payment_method",
+                "pt.transaction_number AS transaction_number",
+                "orders.total_amount AS total_amount",
+                "orders.shipping_fee AS shipping_fee",
+                "orders.discount_amount AS discount_amount",
+                "orders.final_amount AS final_amount",
+                "orders.note AS note",
+                "orders.status_note AS status_note",
+                "orders.created_at AS created_at",
+                "pt.payment_time AS payment_time",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
+                "orders.cancelled_at AS cancelled_at",
+                "orders.recipient_name AS recipient_name",
+                "orders.recipient_phone AS recipient_phone",
+                "orders.shipping_method AS shipping_method",
+                "orders.shipping_address AS shipping_address",
+                "orders.store_code AS store_code",
+                "orders.store_name AS store_name",
+            ])
+            .where("orders.order_number =:orderNumber", {
+                orderNumber: orderNumber,
+            })
+            .getRawOne();
+        const orderItems = await dataSource
+            .getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .select([
+                "orderItems.product_title AS title",
+                "orderItems.quantity AS quantity",
+                "orderItems.price AS price",
+                "orderItems.subtotal AS subtotal",
+            ])
+            .where("orderItems.order_id =:orderId", { orderId: orderData.id })
+            .getRawMany();
+        const itemsResult = orderItems.map((item) => {
+            return {
+                productTitle: item.title,
+                quantity: item.quantity,
+                price: parseInt(item.price),
+                subtotal: parseInt(item.subtotal),
+            };
+        });
+        res.status(200).json({
+            status: true,
+            data: {
+                orderNumber: orderData.order_number,
+                orderStatus: orderData.order_status,
+                shippingStatus: orderData.shipping_status,
+                paymentStatus: orderData.payment_status,
+                paymentMethod: orderData.payment_method,
+                transactionNumber: orderData.transaction_number,
+                totalAmount: parseInt(orderData.total_amount),
+                shippingFee: parseInt(orderData.shipping_fee),
+                discountAmount: parseInt(orderData.discount_amount),
+                finalAmount: parseInt(orderData.final_amount),
+                note: orderData.note,
+                statusNote: orderData.status_note,
+                createdAt: orderData.created_at,
+                paidAt: orderData.payment_time,
+                shippedAt: orderData.shipped_at,
+                completedAt: orderData.completed_at,
+                returnAt: orderData.return_at,
+                cancelledAt: orderData.cancelled_at,
+                shippingInfo: {
+                    recipientName: orderData.recipient_name,
+                    recipientPhone: orderData.recipient_phone,
+                    shippingMethod: orderData.shipping_method,
+                    shippingAddress: orderData.shipping_address,
+                    storeCode: orderData.store_code,
+                    storeName: orderData.store_name,
+                },
+                items: itemsResult,
+            },
+        });
+    } catch (error) {
+        logger.error("取得用戶訂單詳細錯誤:", error);
+        next(error);
     }
-);
+});
 
 //更新訂單狀態
 router.put(

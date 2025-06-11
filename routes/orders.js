@@ -76,6 +76,21 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .offset(skip)
             .limit(limit)
             .getRawMany();
+        if(ordersData.length === 0){
+            res.status(200).json({
+                status: true,
+                data: {
+                    pagination:{
+                        page: page,
+                        limit: limit,
+                        total: count,
+                        totalPages: totalPages,
+                    },
+                    orders: []
+                }
+            })
+            return
+        }
         const orderIds = ordersData.map(data => data.id);
         const transaction = await dataSource.getRepository("PaymentTransactions")
             .createQueryBuilder("transactions")
@@ -87,11 +102,11 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .getRawMany();
         const ordersResult = ordersData.map(order =>{
             const id = order.id;
-            const result =transaction.find(item => item.order_id = id)
+            const result =transaction.find(item => item.order_id === id)
             return {
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
-                paidAt: result.payment_time,
+                paidAt: result ? result.payment_time : null,
                 shippedAt: order.shipped_at,
                 completedAt: order.completed_at,
                 returnAt: order.return_at,
