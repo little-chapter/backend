@@ -52,6 +52,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .select([
                 "orders.id AS id",
                 "orders.order_number AS order_number",
+                "orders.payment_method AS payment_method",
                 "orders.created_at AS created_at",
                 "orders.shipped_at AS shipped_at",
                 "orders.completed_at AS completed_at",
@@ -60,6 +61,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
                 "orders.order_status AS order_status",
                 "orders.payment_status AS payment_status",
                 "orders.shipping_status AS shipping_status",
+                "orders.tracking_number AS tracking_number",
                 "SUM(orderItems.quantity) AS total_quantity"
             ])
             .where("orders.user_id =:userId", {userId: id})
@@ -96,7 +98,8 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .createQueryBuilder("transactions")
             .select([
                 "order_id",
-                "payment_time"
+                "payment_time",
+                "transaction_number"
             ])
             .where("transactions.order_id IN (:...ids)", {ids: orderIds})
             .getRawMany();
@@ -106,6 +109,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
             return {
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
+                paymentMethod: order.payment_method,
                 paidAt: result ? result.payment_time : null,
                 shippedAt: order.shipped_at,
                 completedAt: order.completed_at,
@@ -114,7 +118,9 @@ router.get("/", verifyToken, async(req, res, next) =>{
                 finalAmount: parseInt(order.final_amount),
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
-                shippingStatus: order.shipping_status
+                shippingStatus: order.shipping_status,
+                transactionNumber: result ? result.transaction_number : null,
+                trackingNumber: order.tracking_number
             }
         })
         res.status(200).json({

@@ -1603,7 +1603,8 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
         }
         const orderData = await dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
-            .innerJoin("PaymentTransactions", "pt", "pt.merchant_order_no =:merchantOrderNo", { merchantOrderNo: orderNumber })
+            .leftJoin("PaymentTransactions", "pt", "pt.order_id = orders.id")
+            .innerJoin("orders.User", "user")
             .select([
                 "orders.id AS id",
                 "orders.order_number AS order_number",
@@ -1624,19 +1625,21 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
                 "orders.completed_at AS completed_at",
                 "orders.return_at AS return_at",
                 "orders.cancelled_at AS cancelled_at",
+                "orders.shipping_method AS shipping_method",
                 "orders.recipient_name AS recipient_name",
                 "orders.recipient_phone AS recipient_phone",
-                "orders.shipping_method AS shipping_method",
                 "orders.shipping_address AS shipping_address",
                 "orders.store_code AS store_code",
                 "orders.store_name AS store_name",
+                "orders.tracking_number AS tracking_number",
+                "user.name AS name",
+                "user.email AS email",
+                "user.phone AS phone",
             ])
-            .where("orders.order_number =:orderNumber", {
-                orderNumber: orderNumber,
-            })
+            .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
             .getRawOne();
-        const orderItems = await dataSource
-            .getRepository("OrderItems")
+        console.log(orderData)
+        const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .select([
                 "orderItems.product_title AS title",
@@ -1676,12 +1679,18 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
                 returnAt: orderData.return_at,
                 cancelledAt: orderData.cancelled_at,
                 shippingInfo: {
+                    shippingMethod: orderData.shipping_method,
                     recipientName: orderData.recipient_name,
                     recipientPhone: orderData.recipient_phone,
-                    shippingMethod: orderData.shipping_method,
                     shippingAddress: orderData.shipping_address,
                     storeCode: orderData.store_code,
                     storeName: orderData.store_name,
+                    trackingNumber: orderData.tracking_number
+                },
+                user: {
+                    name: orderData.name,
+                    email:orderData.email,
+                    phone: orderData.phone
                 },
                 items: itemsResult,
             },
