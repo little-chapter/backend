@@ -1793,7 +1793,9 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 .where("order_number =:orderNumber", {orderNumber: orderNumber})
                 .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
                 .getRawOne();
-            if(!returnOrder || (returnOrder.return_at - returnOrder.completed_at) / 86400000 > 7){
+            const returnDateTime = new Date(returnOrder.return_at);
+            const completedDateTime = new Date(returnOrder.completed_at);
+            if(!returnOrder || (returnDateTime - completedDateTime) / 86400000 > 7){
                 res.status(400).json({
                     status: false,
                     message: "無效的訂單狀態或狀態轉換不被允許",

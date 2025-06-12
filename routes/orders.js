@@ -196,5 +196,144 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         next(error);
     }
 })
-
+//請求變更訂單(取消訂單、退貨申請)
+router.post("/action", verifyToken, async(req, res, next) =>{
+    try{
+        const {type} = req.query;
+        const {orderNumber, returnReason} = req.body;
+        const allowedTypes = ["cancel", "return"];
+        if(!type || isNotValidString(type) || !orderNumber || isNotValidString(orderNumber)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(!allowedTypes.includes(type)){
+            res.status(400).json({
+                status: false,
+                message: "不允許的請求類型"
+            })
+            return
+        }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        if(!existOrder){
+            res.status(404).json({
+                status: false,
+                message: "找不到該訂單",
+            });
+            return
+        }
+        //取消訂單
+        if(type === "cancel"){
+            //確認訂單狀態
+            const pendingOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .where("order_number =:orderNumber", {orderNumber})
+                .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
+                .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
+                .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                .getOne();
+            if(!pendingOrder){
+                res.status(400).json({
+                    status: false,
+                    message: "無效的訂單狀態或狀態轉換不被允許",
+                });
+                return
+            }
+            const updateOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .update()
+                .set({
+                    order_status: "cancelled",
+                    cancelled_at: new Date()
+                })
+                .where("order_number =:orderNumber", {orderNumber})
+                .execute();
+            if(updateOrder.affected === 0){
+                logger.warn(`訂單編號 ${orderNumber} 取消訂單失敗`)
+                res.status(422).json({
+                    status: false,
+                    message: ` ${orderNumber} 取消訂單失敗`,
+                });
+                return
+            }
+            res.status(200).json({
+                status: true,
+                message: `${orderNumber} 取消訂單成功`
+            })
+        }
+        //申請退貨
+        if(type === "return"){
+            if(!returnReason || isNotValidString(returnReason)){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料格式不符"
+                })
+                return
+            }
+            const completedOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .where("order_number =:orderNumber", {orderNumber})
+                .andWhere("order_status =:orderStatus", {orderStatus: "completed"})
+                .andWhere("shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+                .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                .getOne();
+            const completedDateTime = new Date(completedOrder.completed_at);
+            const now = new Date();
+            //7天內才可退貨
+            if(!completedOrder || (now - completedDateTime)/86400000 > 7){
+                res.status(400).json({
+                    status: false,
+                    message: "無效的訂單狀態或狀態轉換不被允許",
+                });
+                return
+            }
+            const updateOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .update()
+                .set({
+                    order_status: "returnRequested",
+                    return_at: new Date(),
+                    return_reason: returnReason
+                })
+                .where("order_number =:orderNumber", {orderNumber})
+                .execute();
+            if(updateOrder.affected === 0){
+                //訂單退貨申請失敗
+                logger.warn(`訂單編號 ${orderNumber} 退貨申請失敗`)
+                res.status(422).json({
+                    status: false,
+                    message: ` ${orderNumber} 退貨申請失敗`,
+                });
+                return
+            }
+            logger.info(`訂單編號 ${orderNumber} 退貨申請成功`)
+            //發送退貨申請通知
+            const message = await dataSource.getRepository("Tasks")
+                .createQueryBuilder()
+                .insert()
+                .values({
+                    title: `退貨申請`,
+                    content: `提醒您，訂單編號 ${orderNumber} 提出退貨申請，請儘速審核，謝謝。`,
+                    type: "system",
+                    related_resource_type: "orders",
+                    related_resource_id: completedOrder.id
+                })
+                .execute();
+            if(message.identifiers.length === 0){
+                logger.warn(`訂單編號 ${orderNumber} 發送退貨申請審核通知失敗`)
+            }else{
+                logger.info(`訂單編號 ${orderNumber} 發送退貨申請審核通知成功`)
+            }
+            res.status(200).json({
+                status: true,
+                message: `訂單 ${orderNumber} 成功申請退貨`
+            })
+        }
+    }catch(error){
+        logger.error('請求變更訂單錯誤:', error);
+        next(error);
+    }
+})
 module.exports = router;
