@@ -1697,7 +1697,7 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
     try {
         const allowedTypes = ["ship", "approveReturn", "rejectReturn"];
         const { type } = req.query;
-        const { orderNumber, statusNote } = req.body;
+        const { orderNumber, statusNote, rejectReason } = req.body;
         if (!type || isNotValidString(type) || !orderNumber || isNotValidString(orderNumber)) {
             res.status(400).json({
                 status: false,
@@ -1744,12 +1744,14 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 });
                 return
             }
+            const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
             const updateOrder = await dataSource.getRepository("Orders")
                 .createQueryBuilder()
                 .update()
                 .set({
                     order_status: "completed",
                     shipping_status: "delivered",
+                    tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
                     shipped_at: new Date(),
                     completed_at: new Date()
                 })
@@ -1790,7 +1792,7 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 .createQueryBuilder("orders")
                 .where("order_number =:orderNumber", {orderNumber: orderNumber})
                 .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
-                .getOne();
+                .getRawOne();
             if(!returnOrder || (returnOrder.return_at - returnOrder.completed_at) / 86400000 > 7){
                 res.status(400).json({
                     status: false,
@@ -1798,11 +1800,19 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 });
                 return
             }
+            if(type === "rejectReturn" && !rejectReason ){
+                res.status(400).json({
+                    status: false,
+                    message: "未填寫拒絕退貨申請原因",
+                });
+                return
+            }
             const reviewedOrder = await dataSource.getRepository("Orders")
                 .createQueryBuilder()
                 .update()
                 .set({
-                    order_status: type
+                    order_status: type,
+                    reject_reason: rejectReason || null
                 })
                 .where("order_number =:orderNumber", {orderNumber: orderNumber})
                 .execute();
@@ -1825,7 +1835,7 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 .values({
                     user_id: returnOrder.user_id,
                     title: `退貨申請結果通知`,
-                    content: `親愛的會員，您的訂單 ${orderNumber} 退貨申請${returnMessage[type]} 。`,
+                    content: `親愛的會員，您的訂單 ${orderNumber} 退貨申請${returnMessage[type]}。`,
                     notification_type: "order",
                 })
                 .execute();
