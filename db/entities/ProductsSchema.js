@@ -97,6 +97,11 @@ module.exports = new EntitySchema({
             nullable: false,
             default: true,
         },
+        is_bundle:{
+            type: "boolean",
+            nullable: false,
+            default: false,
+        },
         created_at: {
             type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",

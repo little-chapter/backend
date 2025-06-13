@@ -2271,4 +2271,474 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
         next(error);
     }
 })
+//取得專區候選商品
+router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        let {sectionId} = req.params;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        //商品銷量排行
+        const validSales = await dataSource.getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .innerJoin("orderItems.Orders", "orders")
+            .select([
+                "orderItems.product_id AS id",
+                "SUM(orderItems.quantity) AS sales",
+            ])
+            .where("orders.order_status =:orderStatus", {orderStatus: "completed"})
+            .andWhere("orders.payment_status =:paymentStatus", {paymentStatus: "paid"})
+            .andWhere("orders.shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+            .groupBy("orderItems.product_id")
+            .orderBy("SUM(orderItems.quantity)", "DESC")
+            .getRawMany();
+        sectionId = Number(sectionId);
+        //熱門書籍
+        if(sectionId === 1){
+            //上架商品
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .getRawMany();
+            //有效銷售排行 且 商品須為上架
+            const result = [];
+            validSales.forEach(item =>{
+                const productId = item.id;
+                const product = productsData.find(data =>{
+                    return data.id === productId
+                })
+                if(product){
+                    result.push({
+                        id: item.id,
+                        title: product.title,
+                        sales: parseInt(item.sales),
+                        publisedAt: formatDateToYYYYMMDD(product.publish_at),
+                        isBundle: product.is_bundle
+                    })
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: {
+                    sectionName: "熱門書籍",
+                    products: result
+                }
+            })
+        }
+        //本月亮點新書
+        if(sectionId === 2){
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .orderBy("products.publish_date", "DESC")
+                .getRawMany();
+            const result = productsData.map(item =>{
+                const productId = item.id;
+                const sales = validSales.find(data =>{
+                    return data.id === productId
+                })
+                if(sales){
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: parseInt(sales.sales),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }else{
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: 0,
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: {
+                    sectionName: "本月亮點新書",
+                    products: result
+                }
+            })
+        }
+        //套裝推薦
+        if(sectionId === 3){
+            const productsData = await dataSource.getRepository("Products")
+                .createQueryBuilder("products")
+                .select([
+                    "products.id AS id",
+                    "products.title AS title",
+                    "products.publish_date AS publish_at",
+                    "products.is_bundle AS is_bundle"
+                ])
+                .where("products.is_visible =:isVisible", {isVisible: true})
+                .andWhere("products.is_bundle =:isBundle", {isBundle: true})
+                .orderBy("products.id", "ASC")
+                .getRawMany();
+            const result = productsData.map(item =>{
+                const productId = item.id;
+                const sales = validSales.find(data =>{
+                    return data.id === productId
+                })
+                if(sales){
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: parseInt(sales.sales),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }else{
+                    return {
+                        id: productId,
+                        title: item.title,
+                        sales: 0,
+                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        isBundle: item.is_bundle
+                    }
+                }
+            })
+            res.status(200).json({
+                status: true,
+                data: {
+                    sectionName: "套裝推薦",
+                    products: result
+                }
+            })
+        }
+    }catch(error){
+        logger.error('取得專區候選商品錯誤:', error);
+        next(error);
+    }
+})
+//取得專區商品列表
+router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const {sectionId} = req.params;
+        const filters = req.query;
+        const allowedFilters = {
+            isActive: "boolean",
+            page: "number",
+            limit: "number",
+        }
+        let page = 1;
+        let limit = 5;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        for(const key of Object.keys(filters)){
+            if(!(key in allowedFilters)){
+                res.status(400).json({
+                    status: false,
+                    message: "不允許的搜尋條件"
+                })
+                return
+            }
+            const expectedType = allowedFilters[key];
+            const value = filters[key];
+            if(expectedType === "number"){
+                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+            if(expectedType === "boolean"){
+                if(!value || !isBoolean(value)){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        let productsQuery = dataSource.getRepository("RecommendationProducts")
+            .createQueryBuilder("rp")
+            .innerJoin("rp.Products", "products")
+            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", {isPrimary: true})
+            .select([
+                "rp.product_id AS id",
+                "products.title AS title",
+                "image.image_url AS image_url",
+                "rp.display_order AS display_order",
+                "rp.is_active AS is_active"
+            ])
+            .where("rp.section_id =:sectionId", {sectionId: sectionId})
+        if(filters.isActive){
+            productsQuery = productsQuery
+                .andWhere("rp.is_active =:isActive", {isActive: filters.isActive})
+        }
+        const countQuery = productsQuery.clone(); 
+        const count = await countQuery.getCount();
+        if(filters.page && Number(filters.page) > 1){
+            page = Number(filters.page)
+        }
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
+        }
+        const totalPages = Math.max(1, Math.ceil(count / limit));
+        if(page > totalPages){
+            page = totalPages
+        }
+        const skip = (page - 1) * limit;
+        const productsData = await productsQuery
+            .orderBy("rp.display_order", "ASC")
+            .offset(skip)
+            .limit(limit)
+            .getRawMany();
+        const productsResult = productsData.map(data =>{
+            return {
+                id: data.id,
+                title: data.title,
+                productImage: data.image_url,
+                displayOrder: data.display_order,
+                isActive: data.is_active
+            }
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                pagination: {
+                    page: page,
+                    limit: limit,
+                    totalItems: count,
+                    totalPages: totalPages
+                },
+                books: productsResult
+            }
+        })
+    }catch(error){
+        logger.error('取得專區商品列表錯誤:', error);
+        next(error);
+    }
+})
+//新增專區商品
+router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const {sectionId} = req.params;
+        const {id, displayOrder, isActive} = req.body;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+        !id || isNotValidInteger(Number(id) || Number.isNaN(Number(id)))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(displayOrder && (isNotValidInteger(Number(id)) || Number.isNaN(Number(id)))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(isActive && typeof isActive !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products").findOneBy({id});
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: id});
+        if(existRecommendationProduct){
+            res.status(409).json({
+                status: false,
+                message: "該推薦專區已有此商品"
+            })
+            return
+        }
+        await dataSource.getRepository("RecommendationProducts")
+            .createQueryBuilder("rp")
+            .insert()
+            .values({
+                section_id: Number(sectionId),
+                product_id: Number(id),
+                display_order: displayOrder || 1,
+                is_active: isActive === false ?  isActive : true
+            })
+            .execute();
+        res.status(200).json({
+            status: true,
+            message: "新增專區商品成功"
+        })
+    }catch(error){
+        logger.error('新增專區商品錯誤:', error);
+        next(error);
+    }
+})
+//更新專區商品
+router.put("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const {sectionId, productId} = req.params;
+        const {displayOrder, isActive} = req.body;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+        !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId))) ||
+        !displayOrder || isNotValidInteger(Number(displayOrder) || Number.isNaN(Number(displayOrder))) ||
+        typeof isActive !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: productId});
+        if(!existRecommendationProduct){
+            res.status(404).json({
+                status: false,
+                message: "該推薦專區無此商品"
+            })
+            return
+        }
+        if(existRecommendationProduct.display_order === displayOrder && existRecommendationProduct.is_active === isActive){
+            res.status(200).json({
+                status: true,
+                message: "未變更專區商品資料"
+            })
+            return
+        }
+        await dataSource
+            .createQueryBuilder()
+            .update("RecommendationProducts")
+            .set({
+                display_order: displayOrder,
+                is_active: isActive
+            })
+            .where("section_id =:sectionId", {sectionId})
+            .andWhere("product_id =:productId", {productId})
+            .execute();
+        res.status(200).json({
+            status: true,
+            message: "更新專區商品成功"
+        })
+    }catch(error){
+        logger.error('更新專區商品錯誤:', error);
+        next(error);
+    }
+})
+//刪除專區商品
+router.delete("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const {sectionId, productId} = req.params;
+        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+        !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId)))){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
+        if(!existSection){
+            res.status(404).json({
+                status: false,
+                message: "找不到此推薦專區"
+            })
+            return
+        }
+        const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: productId});
+        if(!existRecommendationProduct){
+            res.status(404).json({
+                status: false,
+                message: "該推薦專區無此商品"
+            })
+            return
+        }
+        await dataSource
+            .createQueryBuilder()
+            .delete()
+            .from("RecommendationProducts")
+            .where("section_id =:sectionId", {sectionId})
+            .andWhere("product_id =:productId", {productId})
+            .execute();
+        res.status(200).json({
+            status: true,
+            message: "刪除專區商品成功"
+        })
+    }catch(error){
+        logger.error('更新專區商品錯誤:', error);
+        next(error);
+    }
+})
+
 module.exports = router;
