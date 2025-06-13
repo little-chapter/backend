@@ -245,6 +245,7 @@ router.get("/reviews", async(req, res, next)=>{
                     "pr.content AS content",
                     "pr.rating AS rating",
                     "user.name AS username",
+                    "user.avatar AS avatar",
                     "pr.created_at AS created_at"
                 ])
                 .orderBy("pr.created_at", "ASC")
@@ -257,6 +258,7 @@ router.get("/reviews", async(req, res, next)=>{
                     content: review.content,
                     rating: review.rating,
                     username: review.username,
+                    userAvatar: review.avatar,
                     createdAt: formatDateToYYYYMMDD(review.created_at)
                 }
             });
@@ -289,7 +291,7 @@ router.get("/reviews", async(req, res, next)=>{
             }
             const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
             if(!existProduct){
-                res.status(400).json({
+                res.status(404).json({
                     status: false,
                     message: "找不到此商品"
                 })
@@ -308,6 +310,7 @@ router.get("/reviews", async(req, res, next)=>{
                     "pr.content AS content",
                     "pr.rating AS rating",
                     "user.name AS username",
+                    "user.avatar AS avatar",
                     "pr.created_at AS created_at"
                 ])
                 .where("products.id =:productId", {productId: productId})
@@ -321,6 +324,7 @@ router.get("/reviews", async(req, res, next)=>{
                     content: review.content,
                     rating: review.rating,
                     username: review.username,
+                    userAvatar: review.avatar,
                     createdAt: formatDateToYYYYMMDD(review.created_at)
                 }
             });
