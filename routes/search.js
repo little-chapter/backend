@@ -22,21 +22,21 @@ router.get("/", async (req, res, next) => {
             sort_order = 'ASC'
         } = req.query;
 
-        console.log('🔍 搜尋參數:', {
-            keyword,
-            category_id,
-            age_range_id,
-            publisher,
-            author,
-            price_range,
-            is_new_arrival,
-            is_bestseller,
-            is_discount,
-            page,
-            limit,
-            sort_by,
-            sort_order
-        });
+        // //console.log('🔍 搜尋參數:', {
+        //     keyword,
+        //     category_id,
+        //     age_range_id,
+        //     publisher,
+        //     author,
+        //     price_range,
+        //     is_new_arrival,
+        //     is_bestseller,
+        //     is_discount,
+        //     page,
+        //     limit,
+        //     sort_by,
+        //     sort_order
+        // });
 
         // 驗證分頁參數
         const pageNum = parseInt(page) || 1;
@@ -67,7 +67,7 @@ router.get("/", async (req, res, next) => {
             .leftJoinAndSelect("p.AgeRanges", "a")
             .where("p.is_visible = :isVisible", { isVisible: true });
 
-        console.log('📊 基本查詢建立完成');
+        //console.log('📊 基本查詢建立完成');
 
         // 擴展關鍵字搜尋（搜尋所有指定欄位）
         if (keyword && keyword.trim()) {
@@ -86,96 +86,96 @@ router.get("/", async (req, res, next) => {
                  OR CAST(p.category_id AS TEXT) ILIKE :keyword)`,
                 { keyword: `%${keywordTrim}%` }
             );
-            console.log('🔍 關鍵字搜尋條件已加入:', keywordTrim);
+            //console.log('🔍 關鍵字搜尋條件已加入:', keywordTrim);
         }
 
         // 主題分類篩選（支援多選）
         if (category_id) {
-            console.log('🔍 原始 category_id 參數:', category_id, '型別:', typeof category_id);
+            //console.log('🔍 原始 category_id 參數:', category_id, '型別:', typeof category_id);
             
             let categoryIds = [];
             if (Array.isArray(category_id)) {
-                console.log('📝 category_id 是陣列格式');
+                //console.log('📝 category_id 是陣列格式');
                 categoryIds = category_id
                     .map(id => {
                         const numId = parseInt(id);
-                        console.log(`   轉換 ${id} -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                        //console.log(`   轉換 ${id} -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                         return numId;
                     })
                     .filter(id => !isNaN(id) && id > 0);
             } else if (typeof category_id === 'string') {
-                console.log('📝 category_id 是字串格式');
+                //console.log('📝 category_id 是字串格式');
                 if (category_id.includes(',')) {
-                    console.log('📝 包含逗號，進行分割');
+                    //console.log('📝 包含逗號，進行分割');
                     categoryIds = category_id.split(',')
                         .map(id => {
                             const trimmedId = id.trim();
                             const numId = parseInt(trimmedId);
-                            console.log(`   分割並轉換 "${trimmedId}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                            //console.log(`   分割並轉換 "${trimmedId}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                             return numId;
                         })
                         .filter(id => !isNaN(id) && id > 0);
                 } else {
                     const numId = parseInt(category_id);
-                    console.log(`📝 單一數值轉換 "${category_id}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                    //console.log(`📝 單一數值轉換 "${category_id}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                     if (!isNaN(numId) && numId > 0) {
                         categoryIds = [numId];
                     }
                 }
             }
             
-            console.log('📂 處理後的 categoryIds:', categoryIds);
+            //console.log('📂 處理後的 categoryIds:', categoryIds);
             
             if (categoryIds.length > 0) {
                 queryBuilder.andWhere("p.category_id IN (:...categoryIds)", { categoryIds });
-                console.log('✅ 主題分類篩選已加入:', categoryIds);
+                //console.log('✅ 主題分類篩選已加入:', categoryIds);
             } else {
-                console.log('❌ 主題分類篩選失敗：無有效的分類ID');
+                //console.log('❌ 主題分類篩選失敗：無有效的分類ID');
             }
         }
 
         // 年齡分類篩選（支援多選）
         if (age_range_id) {
-            console.log('🔍 原始 age_range_id 參數:', age_range_id, '型別:', typeof age_range_id);
+            //console.log('🔍 原始 age_range_id 參數:', age_range_id, '型別:', typeof age_range_id);
             
             let ageRangeIds = [];
             if (Array.isArray(age_range_id)) {
-                console.log('📝 age_range_id 是陣列格式');
+                //console.log('📝 age_range_id 是陣列格式');
                 ageRangeIds = age_range_id
                     .map(id => {
                         const numId = parseInt(id);
-                        console.log(`   轉換 ${id} -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                        //console.log(`   轉換 ${id} -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                         return numId;
                     })
                     .filter(id => !isNaN(id) && id > 0);
             } else if (typeof age_range_id === 'string') {
-                console.log('📝 age_range_id 是字串格式');
+                //console.log('📝 age_range_id 是字串格式');
                 if (age_range_id.includes(',')) {
-                    console.log('📝 包含逗號，進行分割');
+                    //console.log('📝 包含逗號，進行分割');
                     ageRangeIds = age_range_id.split(',')
                         .map(id => {
                             const trimmedId = id.trim();
                             const numId = parseInt(trimmedId);
-                            console.log(`   分割並轉換 "${trimmedId}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                            //console.log(`   分割並轉換 "${trimmedId}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                             return numId;
                         })
                         .filter(id => !isNaN(id) && id > 0);
                 } else {
                     const numId = parseInt(age_range_id);
-                    console.log(`📝 單一數值轉換 "${age_range_id}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
+                    //console.log(`📝 單一數值轉換 "${age_range_id}" -> ${numId}, 有效: ${!isNaN(numId) && numId > 0}`);
                     if (!isNaN(numId) && numId > 0) {
                         ageRangeIds = [numId];
                     }
                 }
             }
             
-            console.log('👶 處理後的 ageRangeIds:', ageRangeIds);
+            //console.log('👶 處理後的 ageRangeIds:', ageRangeIds);
             
             if (ageRangeIds.length > 0) {
                 queryBuilder.andWhere("p.age_range_id IN (:...ageRangeIds)", { ageRangeIds });
-                console.log('✅ 年齡分類篩選已加入:', ageRangeIds);
+                //console.log('✅ 年齡分類篩選已加入:', ageRangeIds);
             } else {
-                console.log('❌ 年齡分類篩選失敗：無有效的年齡範圍ID');
+                //console.log('❌ 年齡分類篩選失敗：無有效的年齡範圍ID');
             }
         }
 
@@ -184,7 +184,7 @@ router.get("/", async (req, res, next) => {
             queryBuilder.andWhere("p.publisher ILIKE :publisher", { 
                 publisher: `%${publisher.trim()}%` 
             });
-            console.log('🏢 出版社篩選已加入:', publisher);
+            //console.log('🏢 出版社篩選已加入:', publisher);
         }
 
         // 作者篩選
@@ -192,7 +192,7 @@ router.get("/", async (req, res, next) => {
             queryBuilder.andWhere("p.author ILIKE :author", { 
                 author: `%${author.trim()}%` 
             });
-            console.log('👨‍💼 作者篩選已加入:', author);
+            //console.log('👨‍💼 作者篩選已加入:', author);
         }
 
         // 價格範圍篩選（優先使用discountPrice，如果沒有則使用price）
@@ -203,21 +203,21 @@ router.get("/", async (req, res, next) => {
                         "(COALESCE(p.discount_price, p.price) <= :maxPrice1)", 
                         { maxPrice1: 400 }
                     );
-                    console.log('💰 價格範圍篩選: 0-400');
+                    //console.log('💰 價格範圍篩選: 0-400');
                     break;
                 case '2': // 401-800
                     queryBuilder.andWhere(
                         "(COALESCE(p.discount_price, p.price) >= :minPrice2 AND COALESCE(p.discount_price, p.price) <= :maxPrice2)", 
                         { minPrice2: 401, maxPrice2: 800 }
                     );
-                    console.log('💰 價格範圍篩選: 401-800');
+                    //console.log('💰 價格範圍篩選: 401-800');
                     break;
                 case '3': // 800以上
                     queryBuilder.andWhere(
                         "(COALESCE(p.discount_price, p.price) > :minPrice3)", 
                         { minPrice3: 800 }
                     );
-                    console.log('💰 價格範圍篩選: 800以上');
+                    //console.log('💰 價格範圍篩選: 800以上');
                     break;
                 default:
                     return res.status(400).json({
@@ -230,17 +230,17 @@ router.get("/", async (req, res, next) => {
         // 特殊標籤篩選
         if (is_new_arrival === 'true') {
             queryBuilder.andWhere("p.is_new_arrival = :isNewArrival", { isNewArrival: true });
-            console.log('🆕 亮點新書篩選已加入');
+            //console.log('🆕 亮點新書篩選已加入');
         }
 
         if (is_bestseller === 'true') {
             queryBuilder.andWhere("p.is_bestseller = :isBestseller", { isBestseller: true });
-            console.log('🔥 熱銷排行篩選已加入');
+            //console.log('🔥 熱銷排行篩選已加入');
         }
 
         if (is_discount === 'true') {
             queryBuilder.andWhere("p.is_discount = :isDiscount", { isDiscount: true });
-            console.log('💸 優惠折扣篩選已加入');
+            //console.log('💸 優惠折扣篩選已加入');
         }
 
         // 排序驗證與設定
@@ -251,12 +251,12 @@ router.get("/", async (req, res, next) => {
         const sortDirection = validSortOrders.includes(sort_order.toUpperCase()) ? sort_order.toUpperCase() : 'ASC';
         
         queryBuilder.orderBy(`p.${sortColumn}`, sortDirection);
-        console.log('📊 排序設定:', `${sortColumn} ${sortDirection}`);
+        //console.log('📊 排序設定:', `${sortColumn} ${sortDirection}`);
 
         // 取得總數
         const totalQuery = queryBuilder.clone();
         const totalNum = await totalQuery.getCount();
-        console.log('📈 查詢總數:', totalNum);
+        //console.log('📈 查詢總數:', totalNum);
         
         if (totalNum === 0) {
             logger.info(`搜尋無結果: 關鍵字="${keyword}"`);
@@ -288,15 +288,15 @@ router.get("/", async (req, res, next) => {
         queryBuilder.offset(offset).limit(limitNum);
 
         // 列印最終SQL查詢
-        console.log('🔧 最終SQL查詢:', queryBuilder.getSql());
-        console.log('🔧 查詢參數:', queryBuilder.getParameters());
+        //console.log('🔧 最終SQL查詢:', queryBuilder.getSql());
+        //console.log('🔧 查詢參數:', queryBuilder.getParameters());
 
         // 執行查詢
         const results = await queryBuilder.getMany();
-        console.log('📋 查詢結果數量:', results.length);
+        //console.log('📋 查詢結果數量:', results.length);
         
         if (results.length > 0) {
-            console.log('📋 第一筆原始資料:', JSON.stringify(results[0], null, 2));
+            //console.log('📋 第一筆原始資料:', JSON.stringify(results[0], null, 2));
         }
 
         // 取得產品圖片資料（另外查詢）
@@ -311,7 +311,7 @@ router.get("/", async (req, res, next) => {
                 .andWhere("pi.is_primary = :isPrimary", { isPrimary: true });
             
             productImages = await imageQuery.getMany();
-            console.log('🖼️ 產品圖片數量:', productImages.length);
+            //console.log('🖼️ 產品圖片數量:', productImages.length);
         }
 
         // 建立圖片對應表
@@ -337,7 +337,7 @@ router.get("/", async (req, res, next) => {
                 isNew: product.is_new_arrival,
                 isHot: product.is_bestseller
             };
-            console.log('✅ 格式化商品:', formattedProduct);
+            //console.log('✅ 格式化商品:', formattedProduct);
             return formattedProduct;
         });
 
@@ -357,7 +357,7 @@ router.get("/", async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('❌ 搜尋API發生錯誤:', error);
+        //console.error('❌ 搜尋API發生錯誤:', error);
         logger.error('搜尋API錯誤:', error);
         
         // 資料庫連接錯誤
