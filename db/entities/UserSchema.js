@@ -87,7 +87,7 @@ module.exports = new EntitySchema({
       nullable: true
     },
     new_email_code_time:{
-      type: "timestamp",
+      type: "timestamptz",
       nullable: true,
     },
     created_at: {
