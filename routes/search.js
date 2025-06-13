@@ -333,7 +333,9 @@ router.get("/", async (req, res, next) => {
                 quantity: 1, // 統一預設1
                 stockQuantity: product.stock_quantity || 0,
                 ageName: product.AgeRanges ? product.AgeRanges.name : '',
-                categoryName: product.Categories ? product.Categories.name : ''
+                categoryName: product.Categories ? product.Categories.name : '',
+                isNew: product.is_new_arrival,
+                isHot: product.is_bestseller
             };
             console.log('✅ 格式化商品:', formattedProduct);
             return formattedProduct;
