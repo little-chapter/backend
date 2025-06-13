@@ -14,7 +14,7 @@ const openai = new OpenAI({
 const MODEL_NAME = process.env.OPENAI_FINE_TUNED_MODEL || "gpt-4o-mini";
 
 // 精簡的系統提示詞 - 專業知識已在fine-tuning中訓練
-const SYSTEM_PROMPT = `你是小小篇章繪本網站的AI客服，請以專業的態度回答此繪本電商相關問題。回答時請使用自然對話方式，不要使用星號格式或其他特殊符號。`;
+const SYSTEM_PROMPT = `你是一個專業客服，請以親切的態度回答此繪本電商相關問題。`;
 
 // AI客服對話
 router.post("/", rateLimiter, async (req, res) => {
@@ -57,7 +57,8 @@ router.post("/", rateLimiter, async (req, res) => {
         },
       ],
       max_tokens: 300, // 降低token數量
-      temperature: 0.2, // 確保一致回應
+      temperature: 0.7, // 確保一致回應
+      top_p: 0.4,
     });
 
     const aiResponse = completion.choices[0].message.content;
