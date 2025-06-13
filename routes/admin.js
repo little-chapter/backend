@@ -1737,128 +1737,143 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
         }
         //確認出貨
         if(type === "ship"){
-            //確認訂單狀態:待出貨 付款狀態:已付款 運送狀態:尚未收貨
-            const pendingOrder = await dataSource.getRepository("Orders")
-                .createQueryBuilder("orders")
-                .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
-                .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
-                .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
-                .getOne();
-            if(!pendingOrder){
-                res.status(400).json({
-                    status: false,
-                    message: "無效的訂單狀態或狀態轉換不被允許",
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                //確認訂單狀態:待出貨 付款狀態:已付款 運送狀態:尚未收貨
+                const pendingOrder = await transactionalEntityManager
+                    .getRepository("Orders")
+                    .createQueryBuilder("orders")
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
+                    .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                    .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
+                    .getOne();
+                if(!pendingOrder){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+                const updateOrder = await transactionalEntityManager.getRepository("Orders")
+                    .createQueryBuilder()
+                    .update()
+                    .set({
+                        order_status: "completed",
+                        shipping_status: "delivered",
+                        tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
+                        shipped_at: new Date(),
+                        completed_at: new Date()
+                    })
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .execute();
+                if(updateOrder.affected === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 確認出貨失敗`)
+                    res.status(422).json({
+                        status: false,
+                        message: `訂單編號 ${orderNumber} 確認出貨失敗`,
+                    });
+                    return
+                }
+                logger.info(`訂單編號 ${orderNumber} 確認出貨成功`)
+                const message = await transactionalEntityManager.getRepository("Notifications")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        user_id: pendingOrder.user_id,
+                        title: `訂單已出貨`,
+                        content: `親愛的會員，訂單 ${orderNumber} 已成功出貨，請留意收件通知。`,
+                        notification_type: "order",
+                    })
+                    .execute();
+                if(message.identifiers.length === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 發送出貨通知失敗`)
+                }else{
+                    logger.info(`訂單編號 ${orderNumber} 發送出貨通知成功`)
+                }
+                res.status(200).json({
+                    status: true,
+                    message: ` ${orderNumber} 已確認出貨`,
                 });
-                return
             }
-            const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-            const updateOrder = await dataSource.getRepository("Orders")
-                .createQueryBuilder()
-                .update()
-                .set({
-                    order_status: "completed",
-                    shipping_status: "delivered",
-                    tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
-                    shipped_at: new Date(),
-                    completed_at: new Date()
-                })
-                .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                .execute();
-            if(updateOrder.affected === 0){
-                logger.warn(`訂單編號 ${orderNumber} 確認出貨失敗`)
-                res.status(422).json({
-                    status: false,
-                    message: `訂單編號 ${orderNumber} 確認出貨失敗`,
-                });
-                return
-            }
-            logger.info(`訂單編號 ${orderNumber} 確認出貨成功`)
-            const message = await dataSource.getRepository("Notifications")
-                .createQueryBuilder()
-                .insert()
-                .values({
-                    user_id: pendingOrder.user_id,
-                    title: `訂單已出貨`,
-                    content: `親愛的會員，訂單 ${orderNumber} 已成功出貨，請留意收件通知。`,
-                    notification_type: "order",
-                })
-                .execute();
-            if(message.identifiers.length === 0){
-                logger.warn(`訂單編號 ${orderNumber} 發送出貨通知失敗`)
-            }else{
-                logger.info(`訂單編號 ${orderNumber} 發送出貨通知成功`)
-            }
-            res.status(200).json({
-                status: true,
-                message: ` ${orderNumber} 已確認出貨`,
-            });
-        }
+        )}
         //通過退貨申請 拒絕退貨申請
         if(type === "approveReturn" || type === "rejectReturn"){
-            const returnOrder = await dataSource.getRepository("Orders")
-                .createQueryBuilder("orders")
-                .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
-                .getRawOne();
-            const returnDateTime = new Date(returnOrder.return_at);
-            const completedDateTime = new Date(returnOrder.completed_at);
-            if(!returnOrder || (returnDateTime - completedDateTime) / 86400000 > 7){
-                res.status(400).json({
-                    status: false,
-                    message: "無效的訂單狀態或狀態轉換不被允許",
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                const returnOrder = await transactionalEntityManager
+                    .getRepository("Orders")
+                    .createQueryBuilder("orders")
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
+                    .getOne();
+                if(!returnOrder || !returnOrder.return_at || !returnOrder.completed_at){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                const returnDateTime = new Date(returnOrder.return_at);
+                const completedDateTime = new Date(returnOrder.completed_at);
+                if((returnDateTime - completedDateTime) / 86400000 > 7){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                if(type === "rejectReturn" && !rejectReason ){
+                    res.status(400).json({
+                        status: false,
+                        message: "未填寫拒絕退貨申請原因",
+                    });
+                    return
+                }
+                const reviewedOrder = await transactionalEntityManager
+                    .getRepository("Orders")
+                    .createQueryBuilder()
+                    .update()
+                    .set({
+                        order_status: type,
+                        reject_reason: type === "rejectReturn" ? rejectReason : null
+                    })
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .execute();
+                if(reviewedOrder.affected === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 審核退貨申請失敗`)
+                    res.status(422).json({
+                        status: false,
+                        message: `訂單編號 ${orderNumber} 審核退貨申請失敗`,
+                    });
+                    return
+                }
+                //發送退貨申請結果通知
+                const returnMessage = {
+                    approveReturn: "已通過",
+                    rejectReturn: "未通過"
+                };
+                const message = await transactionalEntityManager
+                    .getRepository("Notifications")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        user_id: returnOrder.user_id,
+                        title: `退貨申請結果通知`,
+                        content: `親愛的會員，您的訂單 ${orderNumber} 退貨申請${returnMessage[type]}。`,
+                        notification_type: "order",
+                    })
+                    .execute();
+                if(message.identifiers.length === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 發送退貨申請結果通知失敗`)
+                }else{
+                    logger.info(`訂單編號 ${orderNumber} 發送退貨申請結果通知成功`)
+                }
+                res.status(200).json({
+                    status: true,
+                    message: `${orderNumber} ${returnMessage[type]}退貨申請`,
                 });
-                return
             }
-            if(type === "rejectReturn" && !rejectReason ){
-                res.status(400).json({
-                    status: false,
-                    message: "未填寫拒絕退貨申請原因",
-                });
-                return
-            }
-            const reviewedOrder = await dataSource.getRepository("Orders")
-                .createQueryBuilder()
-                .update()
-                .set({
-                    order_status: type,
-                    reject_reason: rejectReason || null
-                })
-                .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                .execute();
-            if(reviewedOrder.affected === 0){
-                logger.warn(`訂單編號 ${orderNumber} 審核退貨申請失敗`)
-                res.status(422).json({
-                    status: false,
-                    message: `訂單編號 ${orderNumber} 審核退貨申請失敗`,
-                });
-                return
-            }
-            //發送退貨申請結果通知
-            const returnMessage = {
-                approveReturn: "已通過",
-                rejectReturn: "未通過"
-            };
-            const message = await dataSource.getRepository("Notifications")
-                .createQueryBuilder()
-                .insert()
-                .values({
-                    user_id: returnOrder.user_id,
-                    title: `退貨申請結果通知`,
-                    content: `親愛的會員，您的訂單 ${orderNumber} 退貨申請${returnMessage[type]}。`,
-                    notification_type: "order",
-                })
-                .execute();
-            if(message.identifiers.length === 0){
-                logger.warn(`訂單編號 ${orderNumber} 發送退貨申請結果通知失敗`)
-            }else{
-                logger.info(`訂單編號 ${orderNumber} 發送退貨申請結果通知成功`)
-            }
-            res.status(200).json({
-                status: true,
-                message: `${orderNumber} ${returnMessage[type]}退貨申請`,
-            });
-        }
+        )}
     } catch (error) {
         logger.error("更新用戶訂單狀態錯誤:", error);
         next(error);
