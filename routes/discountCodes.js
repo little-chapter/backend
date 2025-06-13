@@ -10,11 +10,18 @@ const { isUUID } = require("validator");
 router.get("/", verifyToken, async (req, res) => {
     try {
         const now = new Date();
+        const userId = req.user.id;
 
-        const discountCodesRepo = dataSource.getRepository("DiscountCodes");
+        const discountCodesRepo = dataSource.getRepository("discountCodes");
 
         const rawList = await discountCodesRepo
             .createQueryBuilder("dc")
+            .leftJoin(
+                "discountCodeUsages",                   // 你的使用紀錄表
+                "dcu",                                   // alias
+                "dcu.code_id = dc.id AND dcu.user_id = :userId",
+                { userId }
+            )
             .select([
                 "dc.id AS id",
                 "dc.code AS code",
@@ -26,6 +33,10 @@ router.get("/", verifyToken, async (req, res) => {
                 "dc.used_count AS used_count",
                 "dc.min_purchase AS min_purchase",
             ])
+            .addSelect(
+                `CASE WHEN dcu.id IS NOT NULL THEN TRUE ELSE FALSE END`,
+                "is_used"
+            )
             .where("dc.is_active = :isActive", { isActive: true })
             .andWhere("dc.start_date <= :now", { now })
             .andWhere("dc.end_date >= :now", { now })
@@ -42,9 +53,7 @@ router.get("/", verifyToken, async (req, res) => {
             discountValue: parseFloat(item.discount_value),
             startDate: item.start_date.toISOString(),
             endDate: item.end_date.toISOString(),
-            minPurchase: parseFloat(item.min_purchase), // 未來如果前端要知道最低門檻，可直接回傳
-            // TODO: isUsed 若要判斷使用者是否已使用，之後需 JOIN 相對應紀錄表
-            isUsed: false,
+            isUsed: item.is_used === true || item.is_used === "true",
         }));
 
         return res.status(200).json({
@@ -60,7 +69,6 @@ router.get("/", verifyToken, async (req, res) => {
     }
 });
 
-module.exports = router;
 
 // 兌換折扣碼
 router.post("/:code", verifyToken, async (req, res, next) => {
