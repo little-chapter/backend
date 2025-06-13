@@ -120,11 +120,18 @@ router.get("/", verifyToken, async(req, res, next) =>{
     }
 })
 //標記所有通知為已讀
-router.put("/markAllRead", verifyToken, async(req, res, next) =>{
+router.put("/read", verifyToken, async(req, res, next) =>{
     try{
         const {id} = req.user;
-        let {confirm} = req.body;
+        let {confirm, notificationId} = req.body;
         if(!id || !isUUID(id) || typeof confirm !== "boolean"){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return
+        }
+        if(notificationId && (isNotValidInteger(Number(notificationId)) || Number.isNaN(Number(notificationId)))){
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
@@ -149,28 +156,52 @@ router.put("/markAllRead", verifyToken, async(req, res, next) =>{
             });
             return
         }
-        const updatedNotifications = await dataSource.getRepository("Notifications")
-            .createQueryBuilder("notifications")
-            .update()
-            .set({
-                is_read: true
-            })
-            .where("notifications.is_read =:isRead", {isRead: false})
-            .andWhere("notifications.is_deleted =:isDeleted", {isDeleted: false})
-            .andWhere("notifications.user_id =:userId", {userId: id})
-            .execute();
-        if(updatedNotifications.affected === 0){
+        if(notificationId){
+            const updatedNotifications = await dataSource.getRepository("Notifications")
+                .createQueryBuilder("notifications")
+                .update()
+                .set({
+                    is_read: true
+                })
+                .where("notifications.is_read =:isRead", {isRead: false})
+                .andWhere("notifications.user_id =:userId", {userId: id})
+                .andWhere("notifications.id =:id", {id: notificationId})
+                .execute();
+            if(updatedNotifications.affected === 0){
+                res.status(200).json({
+                    status: true,
+                    message: "沒有未讀的通知",
+                });
+                return
+            }
             res.status(200).json({
                 status: true,
-                message: "沒有未讀通知",
-            });
-            return
+                message: "已將通知標記為已讀",
+                updatedCount: updatedNotifications.affected
+            })
+        }else{
+            const updatedNotifications = await dataSource.getRepository("Notifications")
+                .createQueryBuilder("notifications")
+                .update()
+                .set({
+                    is_read: true
+                })
+                .where("notifications.is_read =:isRead", {isRead: false})
+                .andWhere("notifications.user_id =:userId", {userId: id})
+                .execute();
+            if(updatedNotifications.affected === 0){
+                res.status(200).json({
+                    status: true,
+                    message: "沒有未讀的通知",
+                });
+                return
+            }
+            res.status(200).json({
+                status: true,
+                message: "已將通知標記為已讀",
+                updatedCount: updatedNotifications.affected
+            })
         }
-        res.status(200).json({
-            status: true,
-            message: "已將全部通知標記為已讀",
-            updatedCount: updatedNotifications.affected
-        })
     }catch(error){
         logger.error('已讀所有通知錯誤:', error);
         next(error);
