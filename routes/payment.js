@@ -361,6 +361,24 @@ router.post("/notify", async(req, res, next) =>{
                 price: item.price,
                 subtotal: item.subtotal
             }))
+            //發送管理者出貨任務
+            const shippingTask = await dataSource.getRepository("Tasks")
+                .createQueryBuilder()
+                .insert()
+                .into("Tasks")
+                .values({
+                    title: "出貨提醒",
+                    content: `提醒您，訂單編號 ${orderResult.orderNumber} 可以進行出貨，請儘速處理，謝謝。`,
+                    type: "system",
+                    related_resource_type: "orders",
+                    related_resource_id: orderResult.id
+                })
+                .execute();
+            if(shippingTask.identifiers.length === 0){
+                logger.warn(`發送訂單編號 ${orderResult.orderNumber} 管理者出貨通知失敗`)
+            }else{
+                logger.info(`訂單編號: ${orderResult.orderNumber} 已發送管理者出貨通知`)
+            }
             //發票開立
             const invoiceData = generateEzpay(orderResult, itemsResult);
             const formData = new URLSearchParams(invoiceData).toString();

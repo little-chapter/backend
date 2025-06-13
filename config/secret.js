@@ -10,20 +10,20 @@ module.exports = {
     serviceAccountKey:
       process.env.NODE_ENV === "production"
         ? (() => {
-            try {
-              const keyData = JSON.parse(
-                process.env.GCP_SERVICE_ACCOUNT_KEY || "{}"
-              );
-              // 修正私鑰中的換行符號
-              if (keyData.private_key) {
-                keyData.private_key = keyData.private_key.replace(/\\n/g, "\n");
-              }
-              return keyData;
-            } catch (error) {
-              console.error("Failed to parse GCP_SERVICE_ACCOUNT_KEY:", error);
-              return {};
+          try {
+            const keyData = JSON.parse(
+              process.env.GCP_SERVICE_ACCOUNT_KEY || "{}"
+            );
+            // 修正私鑰中的換行符號
+            if (keyData.private_key) {
+              keyData.private_key = keyData.private_key.replace(/\\n/g, "\n");
             }
-          })()
+            return keyData;
+          } catch (error) {
+            console.error("Failed to parse GCP_SERVICE_ACCOUNT_KEY:", error);
+            return {};
+          }
+        })()
         : null,
     bucketName: process.env.GCP_BUCKET_NAME,
     storageBaseUrl: process.env.GCP_STORAGE_BASE_URL,

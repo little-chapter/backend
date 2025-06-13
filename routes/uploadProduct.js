@@ -26,11 +26,11 @@ const storage = new Storage({
   projectId: gcp.projectId,
   ...(process.env.NODE_ENV === "production"
     ? {
-        credentials: gcp.serviceAccountKey,
-      }
+      credentials: gcp.serviceAccountKey,
+    }
     : {
-        keyFilename: gcp.serviceAccountKeyPath,
-      }),
+      keyFilename: gcp.serviceAccountKeyPath,
+    }),
 });
 const bucket = storage.bucket(gcp.bucketName);
 
