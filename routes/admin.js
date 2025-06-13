@@ -1582,8 +1582,7 @@ router.delete(
         }
     }
 );
-
-// 取得訂單列表
+//取得篩選訂單
 router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
     try {
         const allowedFilters = {
@@ -1600,13 +1599,15 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
             sortOrder: "string",
         };
         const allowedOrderStatus = [
-            "created",
             "pending",
             "shipped",
             "completed",
             "cancelled",
+            "returnRequested",
+            "returnAccepted",
+            "returnRejected"
         ];
-        const allowedPaymentStatus = ["unpaid", "paid", "refunded"];
+        const allowedPaymentStatus = ["unpaid", "paid", "refunded", "authorizationVoided"];
         const allowedShippingStatus = [
             "notReceived",
             "processing",
@@ -1717,6 +1718,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
             .createQueryBuilder("orders")
             .innerJoin("orders.User", "user")
             .select([
+                "orders.id AS id",
                 "orders.order_number AS order_number",
                 "user.name AS username",
                 "orders.final_amount AS final_amount",
@@ -1724,6 +1726,10 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 "orders.payment_status AS payment_status",
                 "orders.shipping_status AS shipping_status",
                 "orders.created_at AS created_at",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
+                "orders.cancelled_at AS cancelled_at",
             ]);
         //起始日期 結束日期
         if (filters.startDate && filters.endDate) {
@@ -1808,7 +1814,32 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         }
         const skip = (page - 1) * limit;
         const ordersData = await orderQuery.offset(skip).limit(limit).getRawMany();
-        const ordersResult = ordersData.map((order) => {
+        if(ordersData.length === 0){
+            res.status(200).json({
+                status: true,
+                data: {
+                    pagination: {
+                        page: page,
+                        limit: limit,
+                        totalPages: totalPages,
+                    },
+                    orders: [],
+                },
+            });
+            return
+        }
+        const orderIds = ordersData.map(data => data.id);
+        const transaction = await dataSource.getRepository("PaymentTransactions")
+            .createQueryBuilder("transactions")
+            .select([
+                "order_id",
+                "payment_time"
+            ])
+            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .getRawMany();
+        const ordersResult = ordersData.map(order => {
+            const id = order.id;
+            const result =transaction.find(item => item.order_id === id);
             return {
                 orderNumber: order.order_number,
                 userName: order.username,
@@ -1816,7 +1847,12 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
                 shippingStatus: order.shipping_status,
-                createdAt: formatDateToYYYYMMDD(order.created_at),
+                createdAt: order.created_at,
+                paidAt: result ? result.payment_time : null,
+                shippedAt: order.shipped_at,
+                completedAt: order.completed_at,
+                returnAt: order.return_at,
+                cancelledAt: order.cancelled_at,
             };
         });
         res.status(200).json({
@@ -1835,212 +1871,303 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         next(error);
     }
 });
-
-// 取得指定訂單詳細資料
-router.get(
-    "/orders/:orderNumber",
-    verifyToken,
-    verifyAdmin,
-    async (req, res, next) => {
-        try {
-            const { orderNumber } = req.params;
-            if (!orderNumber || isNotValidString(orderNumber)) {
-                res.status(400).json({
-                    status: false,
-                    message: "欄位資料格式不符",
-                });
-                return;
-            }
-            const existOrder = await dataSource
-                .getRepository("Orders")
-                .findOneBy({ order_number: orderNumber });
-            if (!existOrder) {
-                res.status(404).json({
-                    status: false,
-                    message: "找不到此訂單",
-                });
-                return;
-            }
-            const orderData = await dataSource
-                .getRepository("Orders")
-                .createQueryBuilder("orders")
-                .innerJoin(
-                    "PaymentTransactions",
-                    "pt",
-                    "pt.merchant_order_no =:merchantOrderNo",
-                    { merchantOrderNo: orderNumber }
-                )
-                .select([
-                    "orders.id AS id",
-                    "orders.order_number AS order_number",
-                    "orders.order_status AS order_status",
-                    "orders.shipping_status AS shipping_status",
-                    "orders.payment_status AS payment_status",
-                    "orders.payment_method AS payment_method",
-                    "pt.transaction_number AS transaction_number",
-                    "orders.total_amount AS total_amount",
-                    "orders.shipping_fee AS shipping_fee",
-                    "orders.discount_amount AS discount_amount",
-                    "orders.final_amount AS final_amount",
-                    "orders.note AS note",
-                    "orders.status_note AS status_note",
-                    "orders.recipient_name AS recipient_name",
-                    "orders.recipient_phone AS recipient_phone",
-                    "orders.shipping_method AS shipping_method",
-                    "orders.shipping_address AS shipping_address",
-                    "orders.store_code AS store_code",
-                    "orders.store_name AS store_name",
-                ])
-                .where("orders.order_number =:orderNumber", {
-                    orderNumber: orderNumber,
-                })
-                .getRawOne();
-            const orderItems = await dataSource
-                .getRepository("OrderItems")
-                .createQueryBuilder("orderItems")
-                .select([
-                    "orderItems.product_title AS title",
-                    "orderItems.quantity AS quantity",
-                    "orderItems.price AS price",
-                    "orderItems.subtotal AS subtotal",
-                ])
-                .where("orderItems.order_id =:orderId", { orderId: orderData.id })
-                .getRawMany();
-            const itemsResult = orderItems.map((item) => {
-                return {
-                    productTitle: item.title,
-                    quantity: item.quantity,
-                    price: parseInt(item.price),
-                    subtotal: parseInt(item.subtotal),
-                };
+//取得訂單詳細
+router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { orderNumber } = req.params;
+        if (!orderNumber || isNotValidString(orderNumber)) {
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
             });
-            res.status(200).json({
-                status: true,
-                data: {
-                    orderNumber: orderData.order_number,
-                    orderStatus: orderData.order_status,
-                    shippingStatus: orderData.shipping_status,
-                    paymentStatus: orderData.payment_status,
-                    paymentMethod: orderData.payment_method,
-                    transactionNumber: orderData.transaction_number,
-                    totalAmount: parseInt(orderData.total_amount),
-                    shippingFee: parseInt(orderData.shipping_fee),
-                    discountAmount: parseInt(orderData.discount_amount),
-                    finalAmount: parseInt(orderData.final_amount),
-                    note: orderData.note,
-                    statusNote: orderData.status_note,
-                    shippingInfo: {
-                        recipientName: orderData.recipient_name,
-                        recipientPhone: orderData.recipient_phone,
-                        shippingMethod: orderData.shipping_method,
-                        shippingAddress: orderData.shipping_address,
-                        storeCode: orderData.store_code,
-                        storeName: orderData.store_name,
-                    },
-                    items: itemsResult,
-                },
-            });
-        } catch (error) {
-            logger.error("取得用戶訂單詳細錯誤:", error);
-            next(error);
+            return;
         }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({ order_number: orderNumber });
+        if (!existOrder) {
+            res.status(404).json({
+                status: false,
+                message: "找不到此訂單",
+            });
+            return;
+        }
+        const orderData = await dataSource.getRepository("Orders")
+            .createQueryBuilder("orders")
+            .leftJoin("PaymentTransactions", "pt", "pt.order_id = orders.id")
+            .innerJoin("orders.User", "user")
+            .select([
+                "orders.id AS id",
+                "orders.order_number AS order_number",
+                "orders.order_status AS order_status",
+                "orders.shipping_status AS shipping_status",
+                "orders.payment_status AS payment_status",
+                "orders.payment_method AS payment_method",
+                "pt.transaction_number AS transaction_number",
+                "orders.total_amount AS total_amount",
+                "orders.shipping_fee AS shipping_fee",
+                "orders.discount_amount AS discount_amount",
+                "orders.final_amount AS final_amount",
+                "orders.note AS note",
+                "orders.status_note AS status_note",
+                "orders.created_at AS created_at",
+                "pt.payment_time AS payment_time",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
+                "orders.cancelled_at AS cancelled_at",
+                "orders.shipping_method AS shipping_method",
+                "orders.recipient_name AS recipient_name",
+                "orders.recipient_phone AS recipient_phone",
+                "orders.shipping_address AS shipping_address",
+                "orders.store_code AS store_code",
+                "orders.store_name AS store_name",
+                "orders.tracking_number AS tracking_number",
+                "user.name AS name",
+                "user.email AS email",
+                "user.phone AS phone",
+            ])
+            .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+            .getRawOne();
+        const orderItems = await dataSource.getRepository("OrderItems")
+            .createQueryBuilder("orderItems")
+            .select([
+                "orderItems.product_title AS title",
+                "orderItems.quantity AS quantity",
+                "orderItems.price AS price",
+                "orderItems.subtotal AS subtotal",
+            ])
+            .where("orderItems.order_id =:orderId", { orderId: orderData.id })
+            .getRawMany();
+        const itemsResult = orderItems.map((item) => {
+            return {
+                productTitle: item.title,
+                quantity: item.quantity,
+                price: parseInt(item.price),
+                subtotal: parseInt(item.subtotal),
+            };
+        });
+        res.status(200).json({
+            status: true,
+            data: {
+                orderNumber: orderData.order_number,
+                orderStatus: orderData.order_status,
+                shippingStatus: orderData.shipping_status,
+                paymentStatus: orderData.payment_status,
+                paymentMethod: orderData.payment_method,
+                transactionNumber: orderData.transaction_number,
+                totalAmount: parseInt(orderData.total_amount),
+                shippingFee: parseInt(orderData.shipping_fee),
+                discountAmount: parseInt(orderData.discount_amount),
+                finalAmount: parseInt(orderData.final_amount),
+                note: orderData.note,
+                statusNote: orderData.status_note,
+                createdAt: orderData.created_at,
+                paidAt: orderData.payment_time,
+                shippedAt: orderData.shipped_at,
+                completedAt: orderData.completed_at,
+                returnAt: orderData.return_at,
+                cancelledAt: orderData.cancelled_at,
+                shippingInfo: {
+                    shippingMethod: orderData.shipping_method,
+                    recipientName: orderData.recipient_name,
+                    recipientPhone: orderData.recipient_phone,
+                    shippingAddress: orderData.shipping_address,
+                    storeCode: orderData.store_code,
+                    storeName: orderData.store_name,
+                    trackingNumber: orderData.tracking_number
+                },
+                user: {
+                    name: orderData.name,
+                    email:orderData.email,
+                    phone: orderData.phone
+                },
+                items: itemsResult,
+            },
+        });
+    } catch (error) {
+        logger.error("取得用戶訂單詳細錯誤:", error);
+        next(error);
     }
-);
+});
 
-// 更新訂單狀態
-router.put(
-    "/orders/:orderNumber/status",
-    verifyToken,
-    verifyAdmin,
-    async (req, res, next) => {
-        try {
-            const { orderNumber } = req.params;
-            const { orderStatus, statusNote } = req.body;
-            if (
-                !orderNumber ||
-                isNotValidString(orderNumber) ||
-                !orderStatus ||
-                isNotValidString(orderStatus)
-            ) {
-                res.status(400).json({
-                    status: false,
-                    message: "欄位資料格式不符",
-                });
-                return;
-            }
-            if (statusNote && typeof statusNote !== "string") {
-                res.status(400).json({
-                    status: false,
-                    message: "欄位資料格式不符",
-                });
-                return;
-            }
-            const existOrder = await dataSource
-                .getRepository("Orders")
-                .findOneBy({ order_number: orderNumber });
-            if (!existOrder) {
-                res.status(404).json({
-                    status: false,
-                    message: "找不到該訂單",
-                });
-                return;
-            }
-            if (
-                (orderStatus === "shipped" &&
-                    existOrder.order_status === "pending" &&
-                    existOrder.payment_status === "paid" &&
-                    existOrder.shipping_status === "notReceived") ||
-                (orderStatus === "completed" &&
-                    existOrder.order_status === "shipped" &&
-                    existOrder.payment_status === "paid" &&
-                    existOrder.shipping_status === "delivered") ||
-                (orderStatus === "cancelled" &&
-                    existOrder.order_status === "pending" &&
-                    existOrder.payment_status === "paid" &&
-                    existOrder.shipping_status === "notReceived") ||
-                (orderStatus === "cancelled" &&
-                    existOrder.order_status === "completed" &&
-                    existOrder.payment_status === "paid" &&
-                    existOrder.shipping_status === "returned")
-            ) {
-                const result = await dataSource
+//更新訂單狀態
+router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const allowedTypes = ["ship", "approveReturn", "rejectReturn"];
+        const { type } = req.query;
+        const { orderNumber, statusNote, rejectReason } = req.body;
+        if (!type || isNotValidString(type) || !orderNumber || isNotValidString(orderNumber)) {
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return;
+        }
+        if (statusNote && typeof statusNote !== "string") {
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return;
+        }
+        if(!allowedTypes.includes(type)){
+            res.status(400).json({
+                status: false,
+                message: "不允許的請求類型",
+            });
+            return;
+        }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({ order_number: orderNumber });
+        if (!existOrder) {
+            res.status(404).json({
+                status: false,
+                message: "找不到該訂單",
+            });
+            return;
+        }
+        //確認出貨
+        if(type === "ship"){
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                //確認訂單狀態:待出貨 付款狀態:已付款 運送狀態:尚未收貨
+                const pendingOrder = await transactionalEntityManager
                     .getRepository("Orders")
                     .createQueryBuilder("orders")
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
+                    .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                    .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
+                    .getOne();
+                if(!pendingOrder){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                const randomThreeDigits = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+                const updateOrder = await transactionalEntityManager.getRepository("Orders")
+                    .createQueryBuilder()
                     .update()
                     .set({
-                        order_status: orderStatus,
-                        status_note: statusNote,
-                        cancelled_at: new Date().toISOString(),
-                        updated_at: new Date().toISOString(),
+                        order_status: "completed",
+                        shipping_status: "delivered",
+                        tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
+                        shipped_at: new Date(),
+                        completed_at: new Date()
                     })
-                    .where("orders.order_number =:orderNumber", {
-                        orderNumber: orderNumber,
-                    })
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
                     .execute();
-                if (result.affected !== 1) {
+                if(updateOrder.affected === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 確認出貨失敗`)
                     res.status(422).json({
                         status: false,
-                        message: "訂單更新失敗",
+                        message: `訂單編號 ${orderNumber} 確認出貨失敗`,
                     });
-                    return;
+                    return
+                }
+                logger.info(`訂單編號 ${orderNumber} 確認出貨成功`)
+                const message = await transactionalEntityManager.getRepository("Notifications")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        user_id: pendingOrder.user_id,
+                        title: `訂單已出貨`,
+                        content: `親愛的會員，訂單 ${orderNumber} 已成功出貨，請留意收件通知。`,
+                        notification_type: "order",
+                    })
+                    .execute();
+                if(message.identifiers.length === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 發送出貨通知失敗`)
+                }else{
+                    logger.info(`訂單編號 ${orderNumber} 發送出貨通知成功`)
                 }
                 res.status(200).json({
                     status: true,
-                    message: "訂單狀態更新成功",
-                });
-            } else {
-                res.status(400).json({
-                    status: false,
-                    message: "無效的訂單狀態或狀態轉換不被允許",
+                    message: ` ${orderNumber} 已確認出貨`,
                 });
             }
-        } catch (error) {
-            logger.error("更新用戶訂單狀態錯誤:", error);
-            next(error);
-        }
+        )}
+        //通過退貨申請 拒絕退貨申請
+        if(type === "approveReturn" || type === "rejectReturn"){
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                const returnOrder = await transactionalEntityManager
+                    .getRepository("Orders")
+                    .createQueryBuilder("orders")
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
+                    .getOne();
+                if(!returnOrder || !returnOrder.return_at || !returnOrder.completed_at){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                const returnDateTime = new Date(returnOrder.return_at);
+                const completedDateTime = new Date(returnOrder.completed_at);
+                if((returnDateTime - completedDateTime) / 86400000 > 7){
+                    res.status(400).json({
+                        status: false,
+                        message: "無效的訂單狀態或狀態轉換不被允許",
+                    });
+                    return
+                }
+                if(type === "rejectReturn" && !rejectReason ){
+                    res.status(400).json({
+                        status: false,
+                        message: "未填寫拒絕退貨申請原因",
+                    });
+                    return
+                }
+                const reviewedOrder = await transactionalEntityManager
+                    .getRepository("Orders")
+                    .createQueryBuilder()
+                    .update()
+                    .set({
+                        order_status: type,
+                        reject_reason: type === "rejectReturn" ? rejectReason : null
+                    })
+                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .execute();
+                if(reviewedOrder.affected === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 審核退貨申請失敗`)
+                    res.status(422).json({
+                        status: false,
+                        message: `訂單編號 ${orderNumber} 審核退貨申請失敗`,
+                    });
+                    return
+                }
+                //發送退貨申請結果通知
+                const returnMessage = {
+                    approveReturn: "已通過",
+                    rejectReturn: "未通過"
+                };
+                const message = await transactionalEntityManager
+                    .getRepository("Notifications")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        user_id: returnOrder.user_id,
+                        title: `退貨申請結果通知`,
+                        content: `親愛的會員，您的訂單 ${orderNumber} 退貨申請${returnMessage[type]}。`,
+                        notification_type: "order",
+                    })
+                    .execute();
+                if(message.identifiers.length === 0){
+                    logger.warn(`訂單編號 ${orderNumber} 發送退貨申請結果通知失敗`)
+                }else{
+                    logger.info(`訂單編號 ${orderNumber} 發送退貨申請結果通知成功`)
+                }
+                res.status(200).json({
+                    status: true,
+                    message: `${orderNumber} ${returnMessage[type]}退貨申請`,
+                });
+            }
+        )}
+    } catch (error) {
+        logger.error("更新用戶訂單狀態錯誤:", error);
+        next(error);
     }
-);
-
+});
 // 管理者取得商品列表
 router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
     try {

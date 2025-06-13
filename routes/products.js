@@ -58,7 +58,7 @@ router.get("/", async(req, res, next)=>{
                 }
             }
         }
-        let productQuery = await dataSource.getRepository("Products")
+        let productQuery = dataSource.getRepository("Products")
             .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
             .innerJoin("products.Categories", "categories")

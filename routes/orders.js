@@ -46,16 +46,22 @@ router.get("/", verifyToken, async(req, res, next) =>{
             });
             return
         }
-        const ordersQuery = await dataSource.getRepository("Orders")
+        let ordersQuery =  dataSource.getRepository("Orders")
             .createQueryBuilder("orders")
             .innerJoin("OrderItems", "orderItems", "orderItems.order_id = orders.id")
             .select([
+                "orders.id AS id",
                 "orders.order_number AS order_number",
+                "orders.payment_method AS payment_method",
                 "orders.created_at AS created_at",
+                "orders.shipped_at AS shipped_at",
+                "orders.completed_at AS completed_at",
+                "orders.return_at AS return_at",
                 "orders.final_amount AS final_amount",
                 "orders.order_status AS order_status",
                 "orders.payment_status AS payment_status",
                 "orders.shipping_status AS shipping_status",
+                "orders.tracking_number AS tracking_number",
                 "SUM(orderItems.quantity) AS total_quantity"
             ])
             .where("orders.user_id =:userId", {userId: id})
@@ -72,15 +78,49 @@ router.get("/", verifyToken, async(req, res, next) =>{
             .offset(skip)
             .limit(limit)
             .getRawMany();
+        if(ordersData.length === 0){
+            res.status(200).json({
+                status: true,
+                data: {
+                    pagination:{
+                        page: page,
+                        limit: limit,
+                        total: count,
+                        totalPages: totalPages,
+                    },
+                    orders: []
+                }
+            })
+            return
+        }
+        const orderIds = ordersData.map(data => data.id);
+        const transaction = await dataSource.getRepository("PaymentTransactions")
+            .createQueryBuilder("transactions")
+            .select([
+                "order_id",
+                "payment_time",
+                "transaction_number"
+            ])
+            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .getRawMany();
         const ordersResult = ordersData.map(order =>{
+            const id = order.id;
+            const result =transaction.find(item => item.order_id === id)
             return {
                 orderNumber: order.order_number,
                 createdAt: order.created_at,
-                totalQuantity: order.total_quantity,
+                paymentMethod: order.payment_method,
+                paidAt: result ? result.payment_time : null,
+                shippedAt: order.shipped_at,
+                completedAt: order.completed_at,
+                returnAt: order.return_at,
+                totalQuantity: parseInt(order.total_quantity),
                 finalAmount: parseInt(order.final_amount),
                 orderStatus: order.order_status,
                 paymentStatus: order.payment_status,
-                shippingStatus: order.shipping_status
+                shippingStatus: order.shipping_status,
+                transactionNumber: result ? result.transaction_number : null,
+                trackingNumber: order.tracking_number
             }
         })
         res.status(200).json({
@@ -159,6 +199,146 @@ router.get("/:orderNumber", verifyToken, async(req, res, next) =>{
         })
     }catch(error){
         logger.error('取得訂單詳細錯誤:', error);
+        next(error);
+    }
+})
+//請求變更訂單(取消訂單、退貨申請)
+router.post("/action", verifyToken, async(req, res, next) =>{
+    try{
+        const {type} = req.query;
+        const {orderNumber, returnReason} = req.body;
+        const allowedTypes = ["cancel", "return"];
+        if(!type || isNotValidString(type) || !orderNumber || isNotValidString(orderNumber)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符"
+            })
+            return
+        }
+        if(!allowedTypes.includes(type)){
+            res.status(400).json({
+                status: false,
+                message: "不允許的請求類型"
+            })
+            return
+        }
+        const existOrder = await dataSource.getRepository("Orders").findOneBy({order_number: orderNumber});
+        if(!existOrder){
+            res.status(404).json({
+                status: false,
+                message: "找不到該訂單",
+            });
+            return
+        }
+        //取消訂單
+        if(type === "cancel"){
+            //確認訂單狀態
+            const pendingOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .where("order_number =:orderNumber", {orderNumber})
+                .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
+                .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
+                .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                .getOne();
+            if(!pendingOrder){
+                res.status(400).json({
+                    status: false,
+                    message: "無效的訂單狀態或狀態轉換不被允許",
+                });
+                return
+            }
+            const updateOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .update()
+                .set({
+                    order_status: "cancelled",
+                    cancelled_at: new Date()
+                })
+                .where("order_number =:orderNumber", {orderNumber})
+                .execute();
+            if(updateOrder.affected === 0){
+                logger.warn(`訂單編號 ${orderNumber} 取消訂單失敗`)
+                res.status(422).json({
+                    status: false,
+                    message: ` ${orderNumber} 取消訂單失敗`,
+                });
+                return
+            }
+            res.status(200).json({
+                status: true,
+                message: `${orderNumber} 取消訂單成功`
+            })
+        }
+        //申請退貨
+        if(type === "return"){
+            if(!returnReason || isNotValidString(returnReason)){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料格式不符"
+                })
+                return
+            }
+            const completedOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .where("order_number =:orderNumber", {orderNumber})
+                .andWhere("order_status =:orderStatus", {orderStatus: "completed"})
+                .andWhere("shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+                .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                .getOne();
+            const completedDateTime = new Date(completedOrder.completed_at);
+            const now = new Date();
+            //7天內才可退貨
+            if(!completedOrder || (now - completedDateTime)/86400000 > 7){
+                res.status(400).json({
+                    status: false,
+                    message: "無效的訂單狀態或狀態轉換不被允許",
+                });
+                return
+            }
+            const updateOrder = await dataSource.getRepository("Orders")
+                .createQueryBuilder("orders")
+                .update()
+                .set({
+                    order_status: "returnRequested",
+                    return_at: new Date(),
+                    return_reason: returnReason
+                })
+                .where("order_number =:orderNumber", {orderNumber})
+                .execute();
+            if(updateOrder.affected === 0){
+                //訂單退貨申請失敗
+                logger.warn(`訂單編號 ${orderNumber} 退貨申請失敗`)
+                res.status(422).json({
+                    status: false,
+                    message: ` ${orderNumber} 退貨申請失敗`,
+                });
+                return
+            }
+            logger.info(`訂單編號 ${orderNumber} 退貨申請成功`)
+            //發送退貨申請通知
+            const message = await dataSource.getRepository("Tasks")
+                .createQueryBuilder()
+                .insert()
+                .values({
+                    title: `退貨申請`,
+                    content: `提醒您，訂單編號 ${orderNumber} 提出退貨申請，請儘速審核，謝謝。`,
+                    type: "system",
+                    related_resource_type: "orders",
+                    related_resource_id: completedOrder.id
+                })
+                .execute();
+            if(message.identifiers.length === 0){
+                logger.warn(`訂單編號 ${orderNumber} 發送退貨申請審核通知失敗`)
+            }else{
+                logger.info(`訂單編號 ${orderNumber} 發送退貨申請審核通知成功`)
+            }
+            res.status(200).json({
+                status: true,
+                message: `訂單 ${orderNumber} 成功申請退貨`
+            })
+        }
+    }catch(error){
+        logger.error('請求變更訂單錯誤:', error);
         next(error);
     }
 })

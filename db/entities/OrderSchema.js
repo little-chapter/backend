@@ -118,6 +118,11 @@ module.exports = new EntitySchema({
             type: "text",
             nullable: true,
         },
+        tracking_number: {
+            type: "varchar",
+            length: 30,
+            nullable: true,
+        },
         shipped_at: {
             type: "timestamptz",
             nullable: true,
@@ -127,6 +132,20 @@ module.exports = new EntitySchema({
             nullable: true,
         },
         cancelled_at: {
+            type: "timestamptz",
+            nullable: true,
+        },
+        return_reason: {
+            type: "varchar",
+            length: 100,
+            nullable: true,
+        },
+        reject_reason:{
+            type: "varchar",
+            length: 100,
+            nullable: true,
+        },
+        return_at: {
             type: "timestamptz",
             nullable: true,
         },
