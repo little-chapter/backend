@@ -2094,6 +2094,8 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                     .createQueryBuilder("orders")
                     .where("order_number =:orderNumber", {orderNumber: orderNumber})
                     .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
+                    .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
+                    .andWhere("shipping_status =:shippingStatus", {shippingStatus: "delivered"})
                     .getOne();
                 if(!returnOrder || !returnOrder.return_at || !returnOrder.completed_at){
                     res.status(400).json({
@@ -2434,16 +2436,15 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
         sectionId = Number(sectionId);
         //熱門書籍
         if(sectionId === 1){
-            //上架商品
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
-                    "products.id AS id",
-                    "products.title AS title",
-                    "products.publish_date AS publish_at",
-                    "products.is_bundle AS is_bundle"
+                    "id",
+                    "title",
+                    "publish_date",
+                    "is_bundle"
                 ])
-                .where("products.is_visible =:isVisible", {isVisible: true})
+                .where("is_visible =:isVisible", {isVisible: true})
                 .getRawMany();
             //有效銷售排行 且 商品須為上架
             const result = [];
@@ -2457,7 +2458,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: item.id,
                         title: product.title,
                         sales: parseInt(item.sales),
-                        publisedAt: formatDateToYYYYMMDD(product.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(product.publish_date),
                         isBundle: product.is_bundle
                     })
                 }
@@ -2475,13 +2476,13 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
-                    "products.id AS id",
-                    "products.title AS title",
-                    "products.publish_date AS publish_at",
-                    "products.is_bundle AS is_bundle"
+                    "id",
+                    "title",
+                    "publish_date",
+                    "is_bundle"
                 ])
-                .where("products.is_visible =:isVisible", {isVisible: true})
-                .orderBy("products.publish_date", "DESC")
+                .where("is_visible =:isVisible", {isVisible: true})
+                .orderBy("publish_date", "DESC")
                 .getRawMany();
             const result = productsData.map(item =>{
                 const productId = item.id;
@@ -2493,7 +2494,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: parseInt(sales.sales),
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }else{
@@ -2501,7 +2502,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: 0,
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }
@@ -2693,7 +2694,7 @@ router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, as
             })
             return
         }
-        if(displayOrder && (isNotValidInteger(Number(id)) || Number.isNaN(Number(id)))){
+        if(displayOrder && (isNotValidInteger(Number(displayOrder)) || Number.isNaN(Number(displayOrder)))){
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"

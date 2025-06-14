@@ -119,7 +119,7 @@ router.get("/", verifyToken, async(req, res, next) =>{
         next(error);
     }
 })
-//標記所有通知為已讀
+//標記通知為已讀
 router.put("/read", verifyToken, async(req, res, next) =>{
     try{
         const {id} = req.user;
@@ -157,6 +157,14 @@ router.put("/read", verifyToken, async(req, res, next) =>{
             return
         }
         if(notificationId){
+            const existNotification = await dataSource.getRepository("Notifications").findOneBy({id: notificationId});
+            if(!existNotification){
+                res.status(404).json({
+                    status: false,
+                    message: "找不到此通知",
+                });
+                return
+            }
             const updatedNotifications = await dataSource.getRepository("Notifications")
                 .createQueryBuilder("notifications")
                 .update()
