@@ -62,7 +62,7 @@ router.get("/", async(req, res, next)=>{
             .createQueryBuilder("products")
             .innerJoin("products.AgeRanges", "ageRanges")
             .innerJoin("products.Categories", "categories")
-            .leftJoin("ProductImages", "image", "image.product_id = products.id")
+            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", {isPrimary: true})
             .select([
                 "products.id AS id",
                 "products.title AS title",
@@ -79,7 +79,6 @@ router.get("/", async(req, res, next)=>{
                 "products.is_discount AS is_discount",
             ])
             .where("products.is_visible =:isVisible", {isVisible: true})
-            .andWhere("image.is_primary =:isPrimary", {isPrimary: true})
         if(filters.categoryId){
             const categoryId = Number(filters.categoryId);
             const existCategoryId = await dataSource.getRepository("Categories").findOneBy({id: categoryId})
@@ -403,10 +402,10 @@ router.get("/:productId", async(req, res, next)=>{
         const allImages = await dataSource.getRepository("ProductImages")
             .createQueryBuilder("images")
             .select([
-                "images.image_url AS image_url",
-                "images.is_primary AS is_primary"
+                "image_url",
+                "is_primary"
             ])
-            .where("images.product_id =:productId", {productId: productData.id})
+            .where("product_id =:productId", {productId: productData.id})
             .orderBy("display_order")
             .getRawMany();
         const productImages = allImages.map(image =>{

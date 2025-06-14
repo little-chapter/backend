@@ -1835,7 +1835,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 "order_id",
                 "payment_time"
             ])
-            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .where("order_id IN (:...ids)", {ids: orderIds})
             .getRawMany();
         const ordersResult = ordersData.map(order => {
             const id = order.id;
@@ -1930,12 +1930,12 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .select([
-                "orderItems.product_title AS title",
-                "orderItems.quantity AS quantity",
-                "orderItems.price AS price",
-                "orderItems.subtotal AS subtotal",
+                "product_title AS title",
+                "quantity",
+                "price",
+                "subtotal",
             ])
-            .where("orderItems.order_id =:orderId", { orderId: orderData.id })
+            .where("order_id =:orderId", { orderId: orderData.id })
             .getRawMany();
         const itemsResult = orderItems.map((item) => {
             return {
@@ -2520,14 +2520,14 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
-                    "products.id AS id",
-                    "products.title AS title",
-                    "products.publish_date AS publish_at",
-                    "products.is_bundle AS is_bundle"
+                    "id",
+                    "title",
+                    "publish_date",
+                    "is_bundle"
                 ])
-                .where("products.is_visible =:isVisible", {isVisible: true})
-                .andWhere("products.is_bundle =:isBundle", {isBundle: true})
-                .orderBy("products.id", "ASC")
+                .where("is_visible =:isVisible", {isVisible: true})
+                .andWhere("is_bundle =:isBundle", {isBundle: true})
+                .orderBy("id", "ASC")
                 .getRawMany();
             const result = productsData.map(item =>{
                 const productId = item.id;
@@ -2539,7 +2539,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: parseInt(sales.sales),
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }else{
@@ -2547,7 +2547,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: 0,
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }

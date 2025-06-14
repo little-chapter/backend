@@ -85,7 +85,7 @@ router.post("/:code", verifyToken, async (req, res, next) => {
         }
         const existCode = await dataSource.getRepository("DiscountCodes")
             .createQueryBuilder("code")
-            .where("code.code =:codeName", { codeName: code })
+            .where("code =:codeName", { codeName: code })
             .getExists();
         if (!existCode) {
             res.status(404).json({
@@ -94,20 +94,20 @@ router.post("/:code", verifyToken, async (req, res, next) => {
             });
             return
         }
-        const now = new Date().toISOString();
+        const now = new Date();
         const validCode = await dataSource.getRepository("DiscountCodes")
             .createQueryBuilder("code")
             .select([
-                "code.id AS id",
-                "code.discount_type AS discount_type",
-                "code.description AS description",
-                "code.discount_value AS discount_value",
-                "code.min_purchase AS min_purchase"
+                "id",
+                "discount_type",
+                "description",
+                "discount_value",
+                "min_purchase"
             ])
-            .where("code.code =:codeName", { codeName: code })
-            .andWhere("code.start_date <=:startDate", { startDate: now })
-            .andWhere("code.end_date >=:endDate", { endDate: now })
-            .andWhere("code.is_active =:isActived", { isActived: true })
+            .where("code =:codeName", { codeName: code })
+            .andWhere("start_date <=:startDate", { startDate: now })
+            .andWhere("end_date >=:endDate", { endDate: now })
+            .andWhere("is_active =:isActived", { isActived: true })
             .getRawOne();
         if (!validCode) {
             res.status(400).json({
@@ -125,8 +125,8 @@ router.post("/:code", verifyToken, async (req, res, next) => {
         }
         const codeUsage = await dataSource.getRepository("DiscountCodeUsages")
             .createQueryBuilder("usage")
-            .where("usage.user_id =:userId", { userId: id })
-            .andWhere("usage.code_id =:codeId", { codeId: validCode.id })
+            .where("user_id =:userId", { userId: id })
+            .andWhere("code_id =:codeId", { codeId: validCode.id })
             .getRawOne();
         if (codeUsage) {
             res.status(409).json({

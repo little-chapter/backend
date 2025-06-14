@@ -88,9 +88,9 @@ router.post("/notify", async(req, res, next) =>{
             const now = new Date().toISOString();
             const pendingOrder = await dataSource.getRepository("PendingOrders")
                 .createQueryBuilder("pendingOrders")
-                .where("pendingOrders.order_number =:orderNumber", {orderNumber: orderNumber})
-                .andWhere("pendingOrders.status =:status", {status: "pending"})
-                .andWhere("pendingOrders.expired_at >=:expiredAt", {expiredAt: now})
+                .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                .andWhere("status =:status", {status: "pending"})
+                .andWhere("expired_at >=:expiredAt", {expiredAt: now})
                 .getOne();
             if(!pendingOrder || Number(result.Amt) !== Number(pendingOrder.final_amount)){
                 logger.warn(`暫存訂單編號 ${orderNumber} 不存在或交易金額與訂單總金額不符`)
