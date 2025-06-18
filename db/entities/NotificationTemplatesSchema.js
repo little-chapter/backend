@@ -1,17 +1,13 @@
 const { EntitySchema } = require("typeorm");
 
 module.exports = new EntitySchema({
-    name: "Notifications",
-    tableName: "notifications",
+    name: "NotificationTemplates",
+    tableName: "notificationTemplates",
     columns: {
         id: {
             type: "integer",
             primary: true,
             generated: "increment",
-        },
-        user_id: {
-            type: "uuid",
-            nullable: false,
         },
         title: {
             type: "varchar",
@@ -32,24 +28,28 @@ module.exports = new EntitySchema({
             length: 255,
             nullable: true,
         },
-        is_read: {
+        is_broadcast: {
             type: "boolean",
             default: false,
             nullable: false
         },
-        is_deleted: {
-            type: "boolean",
-            default: false,
-            nullable: false
-        },
-        template_id: {
-            type: "integer",
+        scheduled_at: {
+            type: "timestamptz",
             nullable: true,
+        },
+        is_send: {
+            type: "boolean",
+            default: false,
+            nullable: false
         },
         created_by_admin: {
             type: "boolean",
-            default: false,
+            default: true,
             nullable: false
+        },
+        created_by: {
+            type: "uuid",
+            nullable: false,
         },
         created_at: {
             type: "timestamptz",
@@ -62,19 +62,9 @@ module.exports = new EntitySchema({
             target: "User",
             type: "many-to-one",
             joinColumn: {
-                name: "user_id",
+                name: "created_by",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "notifications_user_id_fk"
-            },
-            onDelete:"RESTRICT"
-        },
-        NotificationTemplates: {
-            target: "NotificationTemplates",
-            type: "many-to-one",
-            joinColumn: {
-                name: "template_id",
-                referencedColumnName: "id",
-                foreignKeyConstraintName: "notifications_template_id_fk"
+                foreignKeyConstraintName: "notification_templates_created_by_fk"
             },
             onDelete:"RESTRICT"
         }

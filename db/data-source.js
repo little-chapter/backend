@@ -21,6 +21,8 @@ const Notifications = require("./entities/NotificationsSchema");
 const Invoices = require("./entities/InvoicesSchema");
 const Wishlists = require("./entities/WishlistsSchema");
 const Tasks = require("./entities/TasksSchema");
+const NotificationTemplates = require("./entities/NotificationTemplatesSchema");
+const TemplateTargetUsers = require("./entities/TemplateTargetUsersSchema");
 
 const dataSource = new DataSource({
   type: "postgres",
@@ -52,6 +54,8 @@ const dataSource = new DataSource({
     Invoices,
     Wishlists,
     Tasks,
+    NotificationTemplates,
+    TemplateTargetUsers,
   ],
   ssl: config.get("db.ssl"),
 });
