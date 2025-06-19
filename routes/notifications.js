@@ -3,8 +3,8 @@ const router = express.Router();
 const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Notifications');
 const { verifyToken } = require("../middlewares/auth");
-const {isNotValidString, isNotValidInteger} = require("../utils/validUtils")
-const { isBoolean, isUUID } = require("validator");
+const {isNotValidInteger} = require("../utils/validUtils")
+const {isUUID } = require("validator");
 
 //取得所有通知
 router.get("/", verifyToken, async(req, res, next) =>{
@@ -65,16 +65,23 @@ router.get("/", verifyToken, async(req, res, next) =>{
         }
         let notificationQuery = dataSource.getRepository("Notifications")
             .createQueryBuilder("notifications")
-            .select(["id", "title", "content", "notification_type", "is_read", "created_at"])
-            .where("notifications.user_id =:userId", {userId: id})
-            .andWhere("notifications.is_deleted =:isDeleted", {isDeleted: false})
+            .select([
+                "id",
+                "title",
+                "content",
+                "notification_type",
+                "is_read",
+                "created_at"
+            ])
+            .where("user_id =:userId", {userId: id})
+            .andWhere("is_deleted =:isDeleted", {isDeleted: false})
         if(filters.read){
             const read = filters.read === "true" ? true : false;
             notificationQuery = notificationQuery
-                .andWhere("notifications.is_read =:isRead", {isRead: read})
+                .andWhere("is_read =:isRead", {isRead: read})
         }
         notificationQuery = notificationQuery
-            .orderBy("notifications.created_at", "DESC")
+            .orderBy("created_at", "DESC")
         const countQuery = notificationQuery.clone();
         const count = await countQuery.getCount();
         let page = 1;
@@ -147,7 +154,7 @@ router.put("/read", verifyToken, async(req, res, next) =>{
         }
         const existUser = await dataSource.getRepository("User")
             .createQueryBuilder("user")
-            .where("user.id =:userId", {userId: id})
+            .where("id =:userId", {userId: id})
             .getExists();
         if(!existUser){
             res.status(404).json({
@@ -171,9 +178,9 @@ router.put("/read", verifyToken, async(req, res, next) =>{
                 .set({
                     is_read: true
                 })
-                .where("notifications.is_read =:isRead", {isRead: false})
-                .andWhere("notifications.user_id =:userId", {userId: id})
-                .andWhere("notifications.id =:id", {id: notificationId})
+                .where("is_read =:isRead", {isRead: false})
+                .andWhere("user_id =:userId", {userId: id})
+                .andWhere("id =:id", {id: notificationId})
                 .execute();
             if(updatedNotifications.affected === 0){
                 res.status(200).json({
@@ -194,8 +201,8 @@ router.put("/read", verifyToken, async(req, res, next) =>{
                 .set({
                     is_read: true
                 })
-                .where("notifications.is_read =:isRead", {isRead: false})
-                .andWhere("notifications.user_id =:userId", {userId: id})
+                .where("is_read =:isRead", {isRead: false})
+                .andWhere("user_id =:userId", {userId: id})
                 .execute();
             if(updatedNotifications.affected === 0){
                 res.status(200).json({

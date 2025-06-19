@@ -50,7 +50,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         if(carrierNum){
             carrierNum = String(carrierNum);
             const carrierNumRegex = /^\/[0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+\-\.]{7}$/;
-            if(!carrierNumRegex.test(carrierNum)){
+            if(!carrierNumRegex.test(carrierNum) || carrierNum.length !== 8){
                 res.status(400).json({
                     "status": false,
                     "message": "欄位資料格式不符"
@@ -104,7 +104,8 @@ router.post("/", verifyToken, async(req, res, next)=>{
         }
         const existUser = await dataSource.getRepository("User")
             .createQueryBuilder("user")
-            .where("user.id =:userId", {userId: id});
+            .where("id =:id", {id})
+            .getOne();
         if(!existUser){
             res.status(404).json({
                 "status": false,
@@ -114,7 +115,7 @@ router.post("/", verifyToken, async(req, res, next)=>{
         }
         //折扣碼驗證
         if(discountCode){
-            discountCode = String(discountCode).toUpperCase();
+            discountCode = String(discountCode);
             if(isNotValidString(discountCode)){
                 res.status(400).json({
                     "status": false,
@@ -123,13 +124,13 @@ router.post("/", verifyToken, async(req, res, next)=>{
                 return
             }
             //折扣碼是否有效
-            const now = new Date().toISOString();
+            const now = new Date();
             const existCode = await dataSource.getRepository("DiscountCodes")
                 .createQueryBuilder("discountCodes")
-                .where("discountCodes.code =:code", {code: discountCode})
-                .andWhere("discountCodes.start_date <=:startDate", {startDate: now})
-                .andWhere("discountCodes.end_date >:endDate", {endDate: now})
-                .andWhere("discountCodes.is_active =:isActive", {isActive: true})
+                .where("code =:code", {code: discountCode})
+                .andWhere("start_date <=:startDate", {startDate: now})
+                .andWhere("end_date >:endDate", {endDate: now})
+                .andWhere("is_active =:isActive", {isActive: true})
                 .getOne();
             if(!existCode || existCode.min_purchase > totalAmount){
                 res.status(400).json({
@@ -141,8 +142,8 @@ router.post("/", verifyToken, async(req, res, next)=>{
             //用戶是否使用過折扣碼
             const existUsage = await dataSource.getRepository("DiscountCodeUsages")
                 .createQueryBuilder("codeUsages")
-                .where("codeUsages.code_id =:codeId", {codeId: existCode.id})
-                .andWhere("codeUsages.user_id =:userId", {userId: id})
+                .where("code_id =:codeId", {codeId: existCode.id})
+                .andWhere("user_id =:userId", {userId: id})
                 .getOne();
             if(existUsage){
                 res.status(409).json({
@@ -159,11 +160,11 @@ router.post("/", verifyToken, async(req, res, next)=>{
         const existProducts = await dataSource.getRepository("Products")
             .createQueryBuilder("product")
             .select([
-                "product.id AS id",
-                "product.title AS title",
+                "id",
+                "title",
                 "product.stock_quantity AS stock"
             ])
-            .where("product.id IN (:...ids)", {ids: itemsIds})
+            .where("id IN (:...ids)", {ids: itemsIds})
             .getRawMany();
         const productIds = existProducts.map(product =>{ //資料庫商品ids
             return product.id
@@ -211,8 +212,8 @@ router.post("/", verifyToken, async(req, res, next)=>{
         const orderNumber = `ORD${Math.floor(Date.now()/1000)}${randomThreeDigits}`; //建立訂單編號
         const code = await dataSource.getRepository("DiscountCodes")
             .createQueryBuilder("discountCodes")
-            .select(["discountCodes.id AS id"])
-            .where("discountCodes.code =:code", {code: discountCode})
+            .select(["id"])
+            .where("code =:code", {code: discountCode})
             .getRawOne();
         await dataSource.transaction(async (transactionalEntityManager) => {
             //暫存訂單

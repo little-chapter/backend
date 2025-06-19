@@ -1835,7 +1835,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 "order_id",
                 "payment_time"
             ])
-            .where("transactions.order_id IN (:...ids)", {ids: orderIds})
+            .where("order_id IN (:...ids)", {ids: orderIds})
             .getRawMany();
         const ordersResult = ordersData.map(order => {
             const id = order.id;
@@ -1930,12 +1930,12 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
             .select([
-                "orderItems.product_title AS title",
-                "orderItems.quantity AS quantity",
-                "orderItems.price AS price",
-                "orderItems.subtotal AS subtotal",
+                "product_title AS title",
+                "quantity",
+                "price",
+                "subtotal",
             ])
-            .where("orderItems.order_id =:orderId", { orderId: orderData.id })
+            .where("order_id =:orderId", { orderId: orderData.id })
             .getRawMany();
         const itemsResult = orderItems.map((item) => {
             return {
@@ -2052,7 +2052,8 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                         shipping_status: "delivered",
                         tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
                         shipped_at: new Date(),
-                        completed_at: new Date()
+                        completed_at: new Date(),
+                        status_note: statusNote
                     })
                     .where("order_number =:orderNumber", {orderNumber: orderNumber})
                     .execute();
@@ -2354,6 +2355,7 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 "products.is_bestseller AS is_bestseller",
                 "products.is_discount AS is_discount",
                 "products.is_visible AS is_visible",
+                "products.is_bundle AS is_bundle",
             ])
             .where("products.id =:productId", { productId: productId })
             .getRawOne();
@@ -2392,6 +2394,7 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 isBestseller: productData.is_bestseller,
                 isDiscount: productData.is_discount,
                 isVisible: productData.is_visible,
+                isBundle: productData.is_bundle,
                 imageUrls: imageResult
             }
         })
@@ -2520,14 +2523,14 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
-                    "products.id AS id",
-                    "products.title AS title",
-                    "products.publish_date AS publish_at",
-                    "products.is_bundle AS is_bundle"
+                    "id",
+                    "title",
+                    "publish_date",
+                    "is_bundle"
                 ])
-                .where("products.is_visible =:isVisible", {isVisible: true})
-                .andWhere("products.is_bundle =:isBundle", {isBundle: true})
-                .orderBy("products.id", "ASC")
+                .where("is_visible =:isVisible", {isVisible: true})
+                .andWhere("is_bundle =:isBundle", {isBundle: true})
+                .orderBy("id", "ASC")
                 .getRawMany();
             const result = productsData.map(item =>{
                 const productId = item.id;
@@ -2539,7 +2542,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: parseInt(sales.sales),
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }else{
@@ -2547,7 +2550,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         id: productId,
                         title: item.title,
                         sales: 0,
-                        publisedAt: formatDateToYYYYMMDD(item.publish_at),
+                        publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
                 }
@@ -2865,6 +2868,457 @@ router.delete("/recommendations/:sectionId/products/:productId", verifyToken, ve
         })
     }catch(error){
         logger.error('更新專區商品錯誤:', error);
+        next(error);
+    }
+})
+//取得通知列表
+router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        //取得網址參數
+        const filters = req.query;
+        const allowedFilters = {
+            page: "number",
+            limit: "number",
+            isBroadcast: "boolean",
+            notificationType: "string",
+        }
+        for(const key of Object.keys(filters)){
+            if(!(key in allowedFilters)){
+                res.status(400).json({
+                    status: false,
+                    message: "不支援的搜尋條件"
+                })
+                return
+            }
+            const expectedType = allowedFilters[key];
+            const value = filters[key];
+            if(expectedType === "number"){
+                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+            if(expectedType === "number"){
+                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+            if(expectedType === "boolean"){
+                if(!value || !(value === "true" || value === "false")){
+                    res.status(400).json({
+                        status: false,
+                        message: "欄位資料格式不符",
+                    });
+                    return
+                }
+            }
+        }
+        let templateQuery = dataSource.getRepository("NotificationTemplates")
+            .createQueryBuilder("template")
+        if(filters.isBroadcast){
+            const isBroadcast = filters.isBroadcast === "true" ? true : false;
+            templateQuery = templateQuery
+                .andWhere("is_broadcast =:isBroadcast", {isBroadcast})
+        }
+        if(filters.notificationType){
+            const type = filters.notificationType;
+            templateQuery = templateQuery
+                .andWhere("notification_type =:notificationType", {notificationType: type})
+        }
+        templateQuery = templateQuery
+            .orderBy("created_at", "DESC")
+        const countQuery = templateQuery.clone();
+        const count = await countQuery.getCount();
+        let page = 1;
+        let limit = 5;
+        if(filters.page && Number(filters.page) > 1){
+            page = Number(filters.page);
+        }
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
+        }
+        let totalPages = Math.max(1, Math.ceil(count / limit));
+        if(page > totalPages){
+            page = totalPages
+        }
+        const skip = (page - 1) * limit;
+        const templateData = await templateQuery
+            .offset(skip)
+            .limit(limit)
+            .getMany();
+        if(templateData.length === 0){
+            res.status(200).json({
+                status: true,
+                data: {
+                    pagination: {
+                        page: page,
+                        limit: limit,
+                        total: count,
+                        totalPages: totalPages
+                    },
+                    notifications: []
+                }
+            })
+            return
+        }
+        const templateIds = templateData.map(data => data.id);
+        const targetUsersData = await dataSource.getRepository("TemplateTargetUsers")
+            .createQueryBuilder("targetUsers")
+            .select([
+                "template_id",
+                "user_id"
+            ])
+            .where("template_id IN(:...ids)", {ids: templateIds})
+            .getRawMany();
+        const templateResult = templateData.map(template =>{
+            const templateId = template.id;
+            template.targetUsers = [];
+            targetUsersData.forEach(user =>{
+                if(user.template_id === templateId){
+                    template.targetUsers.push(user.user_id); 
+                }
+            })
+            return {
+                id: template.id,
+                title: template.title,
+                content: template.content,
+                notificationType: template.notification_type,
+                linkUrl: template.link_url,
+                isBroadcast: template.is_broadcast,
+                isSend: template.is_send,
+                scheduledAt: template.scheduled_at,
+                createdAt: template.created_at,
+                targetUsers: template.targetUsers
+            }
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                pagination: {
+                    page: page,
+                    limit: limit,
+                    total: count,
+                    totalPages: totalPages
+                },
+                notifications: templateResult
+            }
+        })
+    }catch(error){
+        logger.error('取得通知列表錯誤:', error);
+        next(error);
+    }
+})
+//發送通知
+router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
+    try{
+        const allowedTypes = [
+            "system",
+            "order",
+            "event",
+        ]
+        //取得管理者ID
+        const {id} = req.user;
+        const {title, content, notificationType, linkUrl, isBroadcast, scheduledAt, targetUserIds} = req.body;
+        //必填
+        if(!title || !content || !notificationType || !id){
+            res.status(400).json({
+                status: false,
+                message: "通知標題、通知內容、通知類型為必填欄位",
+            });
+            return
+        }
+        if(!allowedTypes.includes(notificationType)|| typeof isBroadcast !== "boolean" || !validator.isUUID(id)){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return
+        }
+        if(linkUrl && !linkUrl.startsWith("/")){
+            res.status(400).json({
+                status: false,
+                message: "欄位資料格式不符",
+            });
+            return
+        }
+        if(scheduledAt){
+            const scheduledDate = scheduledAt.slice(0, 10);
+            const scheduledTime = scheduledAt.slice(11);
+            if(!validator.isDate(scheduledDate) || !validator.isTime(scheduledTime) || new Date(scheduledAt) <= new Date()){
+                res.status(400).json({
+                    status: false,
+                    message: "排程時間不符規則",
+                });
+                return
+            }
+            
+        }
+        //非全體廣播 需檢查targetUserIds
+        if(isBroadcast === false){
+            if(targetUserIds.length === 0){
+                res.status(400).json({
+                    status: false,
+                    message: "非全體廣播時，發送對象為必填",
+                });
+                return
+            }
+            const validUserIds = targetUserIds.find(userId => !validator.isUUID(userId))
+            if(validUserIds){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料格式不符",
+                });
+                return
+            }
+            const invalidUserIds = [];
+            for(const userId of targetUserIds){
+                const existUser = await dataSource.getRepository("User")
+                    .createQueryBuilder()
+                    .where("id =:id", {id: userId})
+                    .getExists();
+                if(!existUser){
+                    invalidUserIds.push(userId);
+                }
+            }
+            if(invalidUserIds.length !== 0){
+                res.status(404).json({
+                    status: false,
+                    message: "找不到使用者",
+                    error: invalidUserIds
+                });
+                return
+            }
+        }
+        //全體廣播
+        if(isBroadcast === true){
+            //接收對象為有效user
+            const users = await dataSource.getRepository("User").find({
+                select: [
+                    "id"
+                ],
+                where: {
+                    is_active: true
+                }
+            });
+            const userIds = users.map(user => user.id)
+            //要排程
+            if(scheduledAt){
+                //建立模板
+                await dataSource.transaction(async(transactionalEntityManager) => {
+                    const newTemplate = await transactionalEntityManager
+                        .getRepository("NotificationTemplates")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            title: title,
+                            content: content,
+                            notification_type: notificationType,
+                            link_url: linkUrl || null,
+                            is_broadcast: true,
+                            scheduled_at: new Date(scheduledAt),
+                            created_by: id
+                        })
+                        .execute();
+                    if(newTemplate.identifiers.length === 0){
+                        res.status(422).json({
+                            status:false,
+                            message: "建立通知失敗"
+                        })
+                        return
+                    }
+                    const templateId = newTemplate.identifiers[0].id;
+                    //建立接收對象
+                    for(const userId of userIds){
+                        await transactionalEntityManager
+                            .getRepository("TemplateTargetUsers")
+                            .createQueryBuilder()
+                            .insert()
+                            .values({
+                                user_id: userId,
+                                template_id: templateId
+                            })
+                            .execute();
+                    }
+                    res.status(200).json({
+                        status: true,
+                        message: "已建立排程通知"
+                    })
+                    return
+                })
+            }
+            //無排程 建立模板
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                const newTemplate = await transactionalEntityManager
+                    .getRepository("NotificationTemplates")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        title: title,
+                        content: content,
+                        notification_type: notificationType,
+                        link_url: linkUrl || null,
+                        is_broadcast: true,
+                        is_send: true, //發送
+                        created_by: id
+                    })
+                    .execute();
+                if(newTemplate.identifiers.length === 0){
+                    res.status(422).json({
+                        status:false,
+                        message: "建立通知失敗"
+                    })
+                    return
+                }
+                const templateId = newTemplate.identifiers[0].id;
+                //建立接收對象
+                for(const userId of userIds){
+                    await transactionalEntityManager
+                        .getRepository("TemplateTargetUsers")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            user_id: userId,
+                            template_id: templateId
+                        })
+                        .execute();
+                }
+                //建立用戶個人通知
+                for(const userId of userIds){
+                    await transactionalEntityManager
+                        .getRepository("Notifications")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            user_id: userId,
+                            title: title,
+                            content: content,
+                            notification_type: notificationType,
+                            link_url: linkUrl || null,
+                            template_id: templateId,
+                            created_by_admin: true
+                        })
+                        .execute();
+                }
+                res.status(200).json({
+                    status: true,
+                    message: "成功發送通知"
+                })
+                return
+            })
+        }
+        //非廣播=特定用戶targetUserIds
+        if(isBroadcast === false){
+            //有排程
+            if(scheduledAt){
+                //建立模板
+                await dataSource.transaction(async(transactionalEntityManager) => {
+                    const newTemplate = await transactionalEntityManager
+                        .getRepository("NotificationTemplates")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            title: title,
+                            content: content,
+                            notification_type: notificationType,
+                            link_url: linkUrl || null,
+                            scheduled_at: new Date(scheduledAt),
+                            created_by: id
+                        })
+                        .execute();
+                    if(newTemplate.identifiers.length === 0){
+                        res.status(422).json({
+                            status:false,
+                            message: "建立通知失敗"
+                        })
+                        return
+                    }
+                    const templateId = newTemplate.identifiers[0].id;
+                    //建立接收對象
+                    for(const userId of targetUserIds){
+                        await transactionalEntityManager
+                            .getRepository("TemplateTargetUsers")
+                            .createQueryBuilder()
+                            .insert()
+                            .values({
+                                user_id: userId,
+                                template_id: templateId
+                            })
+                            .execute();
+                    }
+                    res.status(200).json({
+                        status: true,
+                        message: "已建立排程通知"
+                    })
+                    return
+                })
+            }
+            //無排程 建立模板
+            await dataSource.transaction(async(transactionalEntityManager) => {
+                const newTemplate = await transactionalEntityManager
+                    .getRepository("NotificationTemplates")
+                    .createQueryBuilder()
+                    .insert()
+                    .values({
+                        title: title,
+                        content: content,
+                        notification_type: notificationType,
+                        link_url: linkUrl || null,
+                        is_send: true, //發送
+                        created_by: id
+                    })
+                    .execute();
+                if(newTemplate.identifiers.length === 0){
+                    res.status(422).json({
+                        status:false,
+                        message: "建立通知失敗"
+                    })
+                    return
+                }
+                const templateId = newTemplate.identifiers[0].id;
+                //建立接收對象
+                for(const userId of targetUserIds){
+                    await transactionalEntityManager
+                        .getRepository("TemplateTargetUsers")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            user_id: userId,
+                            template_id: templateId
+                        })
+                        .execute();
+                }
+                //建立用戶個人通知
+                for(const userId of targetUserIds){
+                    await transactionalEntityManager
+                        .getRepository("Notifications")
+                        .createQueryBuilder()
+                        .insert()
+                        .values({
+                            user_id: userId,
+                            title: title,
+                            content: content,
+                            notification_type: notificationType,
+                            link_url: linkUrl || null,
+                            template_id: templateId,
+                            created_by_admin: true
+                        })
+                        .execute();
+                }
+                res.status(200).json({
+                    status: true,
+                    message: "成功發送通知"
+                })
+            })
+        }
+    }catch(error){
+        logger.error('發送通知錯誤:', error);
         next(error);
     }
 })
