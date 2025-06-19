@@ -10,9 +10,9 @@ async function cleanExpiredPendingOrders(){
             .where("status =:status", { status: "pending" })
             .andWhere("expired_at <:now", { now })
             .execute();
-        logger.info(`Expired pending orders cleaned at ${now} : ${result.affected}`);
+        logger.info(`${now}, Expired pending orders cleaned : ${result.affected}`);
     } catch (err) {
-        logger.warn(`Failed to clean expired pending orders at ${now} :`, err);
+        logger.warn(`${now}, Failed to clean expired pending orders`, err);
     }
 }
 module.exports = {

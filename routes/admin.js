@@ -2052,7 +2052,8 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                         shipping_status: "delivered",
                         tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
                         shipped_at: new Date(),
-                        completed_at: new Date()
+                        completed_at: new Date(),
+                        status_note: statusNote
                     })
                     .where("order_number =:orderNumber", {orderNumber: orderNumber})
                     .execute();

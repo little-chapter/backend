@@ -84,6 +84,7 @@ router.post("/notify", async(req, res, next) =>{
                 })
                 .execute();
             logger.warn(`訂單編號 ${orderNumber} 交易失敗 ${decrypted.Status} : ${decrypted.Message}`)
+            res.send('|1|OK|');
         }else{
             const now = new Date().toISOString();
             const pendingOrder = await dataSource.getRepository("PendingOrders")
