@@ -1815,8 +1815,6 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         }
         const skip = (page - 1) * limit;
         const ordersData = await orderQuery.offset(skip).limit(limit).getRawMany();
-        console.log("HERE");
-        console.log("raw:", ordersData[0]); //
 
         if (ordersData.length === 0) {
             res.status(200).json({
@@ -2905,7 +2903,7 @@ router.get("/ageRanges", verifyToken, verifyAdmin, async (req, res, next) => {
             }
         });
     } catch (error) {
-        console.error("取得年齡列表錯誤:", error);
+        logger.error("取得年齡列表錯誤:", error);
         next(error);
     }
 });
