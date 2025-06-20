@@ -40,9 +40,50 @@
 
 專案使用 TypeORM 實體定義來管理資料庫結構。所有實體定義都位於 `db/entities/` 目錄下。
 
-主要資料表包括：
+### 主要資料表
 
-- 使用者 (users)
+#### 使用者系統
+
+- **users** - 使用者資料表
+
+#### 商品系統
+
+- **products** - 商品資料表
+- **categories** - 商品分類表
+- **ageRanges** - 年齡範圍表
+- **productImages** - 商品圖片表
+- **productReviews** - 商品評價表
+
+#### 購物車與願望清單
+
+- **cartItems** - 購物車項目表
+- **wishlists** - 願望清單表
+
+#### 訂單系統
+
+- **orders** - 訂單主表
+- **orderItems** - 訂單項目表
+- **pendingOrders** - 待處理訂單表
+- **pendingOrderItems** - 待處理訂單項目表
+
+#### 金流與優惠系統
+
+- **paymentTransactions** - 付款交易記錄表
+- **invoices** - 發票資料表
+- **discountCodes** - 優惠券主表
+- **discountCodeUsages** - 優惠券使用記錄表
+
+#### 推薦與通知系統
+
+- **recommendationSections** - 推薦專區表
+- **recommendationProducts** - 專區商品關聯表
+- **notifications** - 通知表
+- **notificationTemplates** - 通知模板表
+- **templateTargetUsers** - 模板目標使用者關聯表
+
+#### 系統管理
+
+- **tasks** - 系統任務表
 
 ## API 路由
 
