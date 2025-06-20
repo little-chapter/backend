@@ -260,7 +260,7 @@ router.get("/users", verifyToken, verifyAdmin, async (req, res, next) => {
 
 // 更新特定用戶的資訊
 router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) => {
-    try {        
+    try {
         const { userId } = req.params;
         const {
             name = null,
@@ -290,7 +290,7 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             });
             return;
         }
-        if(name !== null){
+        if (name !== null) {
             if (isNotValidString(name) || name.length > 50) {
                 res.status(400).json({
                     "status": false,
@@ -356,14 +356,14 @@ router.put("/users/:userId", verifyToken, verifyAdmin, async (req, res, next) =>
             });
             return;
         }
-        if(role === "admin" && isAdmin === false){
+        if (role === "admin" && isAdmin === false) {
             res.status(400).json({
                 "status": false,
                 "message": "當 role 為 admin 時，isAdmin 也必須為 true"
             });
             return;
         }
-        if(role === "customer" && isAdmin === true){
+        if (role === "customer" && isAdmin === true) {
             res.status(400).json({
                 "status": false,
                 "message": "當 role 為 customer 時，isAdmin 也必須為 false"
@@ -493,7 +493,7 @@ router.delete("/products/:productId", verifyToken, verifyAdmin, async (req, res,
             });
             return;
         }
-        if(product.is_visible === false){
+        if (product.is_visible === false) {
             res.status(200).json({
                 "status": true,
                 "message": "此商品原本就已下架，無需刪除"
@@ -601,7 +601,8 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 return;
             }
         }
-        if (isbn && !validator.isISBN(isbn)) {
+
+        if (isbn && !validator.isISBN(isbn, 13)) {
             res.status(400).json({
                 "status": false,
                 "message": "isbn 必須為有效的 ISBN 格式"
@@ -1814,7 +1815,10 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
         }
         const skip = (page - 1) * limit;
         const ordersData = await orderQuery.offset(skip).limit(limit).getRawMany();
-        if(ordersData.length === 0){
+        console.log("HERE");
+        console.log("raw:", ordersData[0]); //
+
+        if (ordersData.length === 0) {
             res.status(200).json({
                 status: true,
                 data: {
@@ -1839,7 +1843,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
             .getRawMany();
         const ordersResult = ordersData.map(order => {
             const id = order.id;
-            const result =transaction.find(item => item.order_id === id);
+            const result = transaction.find(item => item.order_id === id);
             return {
                 orderNumber: order.order_number,
                 userName: order.username,
@@ -1855,6 +1859,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 cancelledAt: order.cancelled_at,
             };
         });
+
         res.status(200).json({
             status: true,
             data: {
@@ -1925,7 +1930,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
                 "user.email AS email",
                 "user.phone AS phone",
             ])
-            .where("orders.order_number =:orderNumber", {orderNumber: orderNumber})
+            .where("orders.order_number =:orderNumber", { orderNumber: orderNumber })
             .getRawOne();
         const orderItems = await dataSource.getRepository("OrderItems")
             .createQueryBuilder("orderItems")
@@ -1977,7 +1982,7 @@ router.get("/orders/:orderNumber", verifyToken, verifyAdmin, async (req, res, ne
                 },
                 user: {
                     name: orderData.name,
-                    email:orderData.email,
+                    email: orderData.email,
                     phone: orderData.phone
                 },
                 items: itemsResult,
@@ -2009,7 +2014,7 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
             });
             return;
         }
-        if(!allowedTypes.includes(type)){
+        if (!allowedTypes.includes(type)) {
             res.status(400).json({
                 status: false,
                 message: "不允許的請求類型",
@@ -2025,18 +2030,18 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
             return;
         }
         //確認出貨
-        if(type === "ship"){
-            await dataSource.transaction(async(transactionalEntityManager) => {
+        if (type === "ship") {
+            await dataSource.transaction(async (transactionalEntityManager) => {
                 //確認訂單狀態:待出貨 付款狀態:已付款 運送狀態:尚未收貨
                 const pendingOrder = await transactionalEntityManager
                     .getRepository("Orders")
                     .createQueryBuilder("orders")
-                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                    .andWhere("order_status =:orderStatus", {orderStatus: "pending"})
-                    .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
-                    .andWhere("shipping_status =:shippingStatus", {shippingStatus: "notReceived"})
+                    .where("order_number =:orderNumber", { orderNumber: orderNumber })
+                    .andWhere("order_status =:orderStatus", { orderStatus: "pending" })
+                    .andWhere("payment_status =:paymentStatus", { paymentStatus: "paid" })
+                    .andWhere("shipping_status =:shippingStatus", { shippingStatus: "notReceived" })
                     .getOne();
-                if(!pendingOrder){
+                if (!pendingOrder) {
                     res.status(400).json({
                         status: false,
                         message: "無效的訂單狀態或狀態轉換不被允許",
@@ -2050,14 +2055,14 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                     .set({
                         order_status: "completed",
                         shipping_status: "delivered",
-                        tracking_number: `${Math.floor(Date.now()/1000)}${randomThreeDigits}`,
+                        tracking_number: `${Math.floor(Date.now() / 1000)}${randomThreeDigits}`,
                         shipped_at: new Date(),
                         completed_at: new Date(),
                         status_note: statusNote
                     })
-                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .where("order_number =:orderNumber", { orderNumber: orderNumber })
                     .execute();
-                if(updateOrder.affected === 0){
+                if (updateOrder.affected === 0) {
                     logger.warn(`訂單編號 ${orderNumber} 確認出貨失敗`)
                     res.status(422).json({
                         status: false,
@@ -2076,9 +2081,9 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                         notification_type: "order",
                     })
                     .execute();
-                if(message.identifiers.length === 0){
+                if (message.identifiers.length === 0) {
                     logger.warn(`訂單編號 ${orderNumber} 發送出貨通知失敗`)
-                }else{
+                } else {
                     logger.info(`訂單編號 ${orderNumber} 發送出貨通知成功`)
                 }
                 res.status(200).json({
@@ -2086,19 +2091,20 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                     message: ` ${orderNumber} 已確認出貨`,
                 });
             }
-        )}
+            )
+        }
         //通過退貨申請 拒絕退貨申請
-        if(type === "approveReturn" || type === "rejectReturn"){
-            await dataSource.transaction(async(transactionalEntityManager) => {
+        if (type === "approveReturn" || type === "rejectReturn") {
+            await dataSource.transaction(async (transactionalEntityManager) => {
                 const returnOrder = await transactionalEntityManager
                     .getRepository("Orders")
                     .createQueryBuilder("orders")
-                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
-                    .andWhere("order_status =:orderStatus", {orderStatus: "returnRequested"})
-                    .andWhere("payment_status =:paymentStatus", {paymentStatus: "paid"})
-                    .andWhere("shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+                    .where("order_number =:orderNumber", { orderNumber: orderNumber })
+                    .andWhere("order_status =:orderStatus", { orderStatus: "returnRequested" })
+                    .andWhere("payment_status =:paymentStatus", { paymentStatus: "paid" })
+                    .andWhere("shipping_status =:shippingStatus", { shippingStatus: "delivered" })
                     .getOne();
-                if(!returnOrder || !returnOrder.return_at || !returnOrder.completed_at){
+                if (!returnOrder || !returnOrder.return_at || !returnOrder.completed_at) {
                     res.status(400).json({
                         status: false,
                         message: "無效的訂單狀態或狀態轉換不被允許",
@@ -2107,14 +2113,14 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                 }
                 const returnDateTime = new Date(returnOrder.return_at);
                 const completedDateTime = new Date(returnOrder.completed_at);
-                if((returnDateTime - completedDateTime) / 86400000 > 7){
+                if ((returnDateTime - completedDateTime) / 86400000 > 7) {
                     res.status(400).json({
                         status: false,
                         message: "無效的訂單狀態或狀態轉換不被允許",
                     });
                     return
                 }
-                if(type === "rejectReturn" && !rejectReason ){
+                if (type === "rejectReturn" && !rejectReason) {
                     res.status(400).json({
                         status: false,
                         message: "未填寫拒絕退貨申請原因",
@@ -2129,9 +2135,9 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                         order_status: type,
                         reject_reason: type === "rejectReturn" ? rejectReason : null
                     })
-                    .where("order_number =:orderNumber", {orderNumber: orderNumber})
+                    .where("order_number =:orderNumber", { orderNumber: orderNumber })
                     .execute();
-                if(reviewedOrder.affected === 0){
+                if (reviewedOrder.affected === 0) {
                     logger.warn(`訂單編號 ${orderNumber} 審核退貨申請失敗`)
                     res.status(422).json({
                         status: false,
@@ -2155,9 +2161,9 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                         notification_type: "order",
                     })
                     .execute();
-                if(message.identifiers.length === 0){
+                if (message.identifiers.length === 0) {
                     logger.warn(`訂單編號 ${orderNumber} 發送退貨申請結果通知失敗`)
-                }else{
+                } else {
                     logger.info(`訂單編號 ${orderNumber} 發送退貨申請結果通知成功`)
                 }
                 res.status(200).json({
@@ -2165,7 +2171,8 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                     message: `${orderNumber} ${returnMessage[type]}退貨申請`,
                 });
             }
-        )}
+            )
+        }
     } catch (error) {
         logger.error("更新用戶訂單狀態錯誤:", error);
         next(error);
@@ -2216,7 +2223,11 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             .createQueryBuilder("products")
             .innerJoin("products.Categories", "categories")
             .innerJoin("products.AgeRanges", "ageRanges")
-            .leftJoin("ProductImages", "image", "image.product_id = products.id", "image.is_primary =:isPrimary", { isPrimary: true })
+            .leftJoin(
+                "ProductImages",
+                "image",
+                "image.product_id = products.id AND image.is_primary = true"
+            )
             .select([
                 "products.id AS id",
                 "image.image_url AS imageurl",
@@ -2226,7 +2237,9 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
                 "products.stock_quantity AS stock_quantity",
                 "products.is_visible AS is_visible",
                 "categories.id AS categories_id",
-                "ageRanges.id AS age_ranges_id"
+                "categories.name AS category_name",            // ✅ 加這行
+                "ageRanges.id AS age_ranges_id",
+                "ageRanges.name AS age_range_name"             // ✅ 加這行
             ])
         if (filters.categoryId) {
             const categoryId = Number(filters.categoryId);
@@ -2290,7 +2303,9 @@ router.get("/products", verifyToken, verifyAdmin, async (req, res, next) => {
                 stockQuantify: product.stock_quantity,
                 isVisible: product.is_visible,
                 categoryId: product.categories_id,
-                ageRangeId: product.age_ranges_id
+                categoryName: product.category_name,             // ✅ 加這行
+                ageRangeId: product.age_ranges_id,
+                ageRangeName: product.age_range_name             // ✅ 加這行
             }
         })
         res.status(200).json({
@@ -2341,8 +2356,10 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 "products.id AS id",
                 "products.title AS title",
                 "products.author AS author",
+                "products.illustrator AS illustrator",
                 "products.publisher AS publisher",
                 "products.isbn AS isbn",
+                "products.description AS description",
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "products.stock_quantity AS stock_quantity",
@@ -2357,6 +2374,8 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 "products.is_visible AS is_visible",
                 "products.is_bundle AS is_bundle",
             ])
+            .addSelect("products.age_range_id", "ageRangeId")
+            .addSelect("products.category_id", "categoryId")
             .where("products.id =:productId", { productId: productId })
             .getRawOne();
         const imageData = await dataSource.getRepository("ProductImages")
@@ -2382,6 +2401,7 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 illustrator: productData.illustrator,
                 publisher: productData.publisher,
                 isbn: productData.isbn,
+                description: productData.description,
                 price: parseInt(productData.price),
                 discountPrice: parseInt(productData.discount_price),
                 stockQuantity: productData.stock_quantity,
@@ -2389,6 +2409,8 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
                 publishDate: formatDateToYYYYMMDD(productData.publish_date),
                 ageRangeName: productData.ageranges_name,
                 categoryName: productData.category_name,
+                ageRangeId: productData.ageRangeId,
+                categoryId: productData.categoryId,
                 introductionHtml: productData.introduction_html,
                 isNewArrival: productData.is_new_arrival,
                 isBestseller: productData.is_bestseller,
@@ -2404,18 +2426,18 @@ router.get("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
     }
 })
 //取得專區候選商品
-router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
-        let {sectionId} = req.params;
-        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        let { sectionId } = req.params;
+        if (!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
-        if(!existSection){
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({ id: sectionId });
+        if (!existSection) {
             res.status(404).json({
                 status: false,
                 message: "找不到此推薦專區"
@@ -2430,15 +2452,15 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                 "orderItems.product_id AS id",
                 "SUM(orderItems.quantity) AS sales",
             ])
-            .where("orders.order_status =:orderStatus", {orderStatus: "completed"})
-            .andWhere("orders.payment_status =:paymentStatus", {paymentStatus: "paid"})
-            .andWhere("orders.shipping_status =:shippingStatus", {shippingStatus: "delivered"})
+            .where("orders.order_status =:orderStatus", { orderStatus: "completed" })
+            .andWhere("orders.payment_status =:paymentStatus", { paymentStatus: "paid" })
+            .andWhere("orders.shipping_status =:shippingStatus", { shippingStatus: "delivered" })
             .groupBy("orderItems.product_id")
             .orderBy("SUM(orderItems.quantity)", "DESC")
             .getRawMany();
         sectionId = Number(sectionId);
         //熱門書籍
-        if(sectionId === 1){
+        if (sectionId === 1) {
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
@@ -2447,16 +2469,16 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                     "publish_date",
                     "is_bundle"
                 ])
-                .where("is_visible =:isVisible", {isVisible: true})
+                .where("is_visible =:isVisible", { isVisible: true })
                 .getRawMany();
             //有效銷售排行 且 商品須為上架
             const result = [];
-            validSales.forEach(item =>{
+            validSales.forEach(item => {
                 const productId = item.id;
-                const product = productsData.find(data =>{
+                const product = productsData.find(data => {
                     return data.id === productId
                 })
-                if(product){
+                if (product) {
                     result.push({
                         id: item.id,
                         title: product.title,
@@ -2475,7 +2497,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
             })
         }
         //本月亮點新書
-        if(sectionId === 2){
+        if (sectionId === 2) {
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
@@ -2484,15 +2506,15 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                     "publish_date",
                     "is_bundle"
                 ])
-                .where("is_visible =:isVisible", {isVisible: true})
+                .where("is_visible =:isVisible", { isVisible: true })
                 .orderBy("publish_date", "DESC")
                 .getRawMany();
-            const result = productsData.map(item =>{
+            const result = productsData.map(item => {
                 const productId = item.id;
-                const sales = validSales.find(data =>{
+                const sales = validSales.find(data => {
                     return data.id === productId
                 })
-                if(sales){
+                if (sales) {
                     return {
                         id: productId,
                         title: item.title,
@@ -2500,7 +2522,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
-                }else{
+                } else {
                     return {
                         id: productId,
                         title: item.title,
@@ -2519,7 +2541,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
             })
         }
         //套裝推薦
-        if(sectionId === 3){
+        if (sectionId === 3) {
             const productsData = await dataSource.getRepository("Products")
                 .createQueryBuilder("products")
                 .select([
@@ -2532,12 +2554,12 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                 .andWhere("is_bundle =:isBundle", {isBundle: true})
                 .orderBy("id", "ASC")
                 .getRawMany();
-            const result = productsData.map(item =>{
+            const result = productsData.map(item => {
                 const productId = item.id;
-                const sales = validSales.find(data =>{
+                const sales = validSales.find(data => {
                     return data.id === productId
                 })
-                if(sales){
+                if (sales) {
                     return {
                         id: productId,
                         title: item.title,
@@ -2545,7 +2567,7 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                         publisedAt: formatDateToYYYYMMDD(item.publish_date),
                         isBundle: item.is_bundle
                     }
-                }else{
+                } else {
                     return {
                         id: productId,
                         title: item.title,
@@ -2563,15 +2585,15 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                 }
             })
         }
-    }catch(error){
+    } catch (error) {
         logger.error('取得專區候選商品錯誤:', error);
         next(error);
     }
 })
 //取得專區商品列表
-router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
-        const {sectionId} = req.params;
+router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { sectionId } = req.params;
         const filters = req.query;
         const allowedFilters = {
             isActive: "boolean",
@@ -2580,15 +2602,15 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
         }
         let page = 1;
         let limit = 5;
-        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))){
+        if (!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId))) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        for(const key of Object.keys(filters)){
-            if(!(key in allowedFilters)){
+        for (const key of Object.keys(filters)) {
+            if (!(key in allowedFilters)) {
                 res.status(400).json({
                     status: false,
                     message: "不允許的搜尋條件"
@@ -2597,8 +2619,8 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
             }
             const expectedType = allowedFilters[key];
             const value = filters[key];
-            if(expectedType === "number"){
-                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+            if (expectedType === "number") {
+                if (!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -2606,8 +2628,8 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
                     return
                 }
             }
-            if(expectedType === "boolean"){
-                if(!value || !isBoolean(value)){
+            if (expectedType === "boolean") {
+                if (!value || !isBoolean(value)) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -2616,8 +2638,8 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
                 }
             }
         }
-        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
-        if(!existSection){
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({ id: sectionId });
+        if (!existSection) {
             res.status(404).json({
                 status: false,
                 message: "找不到此推薦專區"
@@ -2627,7 +2649,7 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
         let productsQuery = dataSource.getRepository("RecommendationProducts")
             .createQueryBuilder("rp")
             .innerJoin("rp.Products", "products")
-            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", {isPrimary: true})
+            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", { isPrimary: true })
             .select([
                 "rp.product_id AS id",
                 "products.title AS title",
@@ -2635,21 +2657,21 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
                 "rp.display_order AS display_order",
                 "rp.is_active AS is_active"
             ])
-            .where("rp.section_id =:sectionId", {sectionId: sectionId})
-        if(filters.isActive){
+            .where("rp.section_id =:sectionId", { sectionId: sectionId })
+        if (filters.isActive) {
             productsQuery = productsQuery
-                .andWhere("rp.is_active =:isActive", {isActive: filters.isActive})
+                .andWhere("rp.is_active =:isActive", { isActive: filters.isActive })
         }
-        const countQuery = productsQuery.clone(); 
+        const countQuery = productsQuery.clone();
         const count = await countQuery.getCount();
-        if(filters.page && Number(filters.page) > 1){
+        if (filters.page && Number(filters.page) > 1) {
             page = Number(filters.page)
         }
-        if(filters.limit && Number(filters.limit) >= 1){
+        if (filters.limit && Number(filters.limit) >= 1) {
             limit = Number(filters.limit)
         }
         const totalPages = Math.max(1, Math.ceil(count / limit));
-        if(page > totalPages){
+        if (page > totalPages) {
             page = totalPages
         }
         const skip = (page - 1) * limit;
@@ -2658,7 +2680,7 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
             .offset(skip)
             .limit(limit)
             .getRawMany();
-        const productsResult = productsData.map(data =>{
+        const productsResult = productsData.map(data => {
             return {
                 id: data.id,
                 title: data.title,
@@ -2679,56 +2701,56 @@ router.get("/recommendations/:sectionId/products", verifyToken, verifyAdmin, asy
                 books: productsResult
             }
         })
-    }catch(error){
+    } catch (error) {
         logger.error('取得專區商品列表錯誤:', error);
         next(error);
     }
 })
 //新增專區商品
-router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
-        const {sectionId} = req.params;
-        const {id, displayOrder, isActive} = req.body;
-        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
-        !id || isNotValidInteger(Number(id) || Number.isNaN(Number(id)))){
+router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { sectionId } = req.params;
+        const { id, displayOrder, isActive } = req.body;
+        if (!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+            !id || isNotValidInteger(Number(id) || Number.isNaN(Number(id)))) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        if(displayOrder && (isNotValidInteger(Number(displayOrder)) || Number.isNaN(Number(displayOrder)))){
+        if (displayOrder && (isNotValidInteger(Number(displayOrder)) || Number.isNaN(Number(displayOrder)))) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        if(isActive && typeof isActive !== "boolean"){
+        if (isActive && typeof isActive !== "boolean") {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
-        if(!existSection){
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({ id: sectionId });
+        if (!existSection) {
             res.status(404).json({
                 status: false,
                 message: "找不到此推薦專區"
             })
             return
         }
-        const existProduct = await dataSource.getRepository("Products").findOneBy({id});
-        if(!existProduct){
+        const existProduct = await dataSource.getRepository("Products").findOneBy({ id });
+        if (!existProduct) {
             res.status(404).json({
                 status: false,
                 message: "找不到此商品"
             })
             return
         }
-        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: id});
-        if(existRecommendationProduct){
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({ section_id: sectionId, product_id: id });
+        if (existRecommendationProduct) {
             res.status(409).json({
                 status: false,
                 message: "該推薦專區已有此商品"
@@ -2742,58 +2764,58 @@ router.post("/recommendations/:sectionId/products", verifyToken, verifyAdmin, as
                 section_id: Number(sectionId),
                 product_id: Number(id),
                 display_order: displayOrder || 1,
-                is_active: isActive === false ?  isActive : true
+                is_active: isActive === false ? isActive : true
             })
             .execute();
         res.status(200).json({
             status: true,
             message: "新增專區商品成功"
         })
-    }catch(error){
+    } catch (error) {
         logger.error('新增專區商品錯誤:', error);
         next(error);
     }
 })
 //更新專區商品
-router.put("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
-        const {sectionId, productId} = req.params;
-        const {displayOrder, isActive} = req.body;
-        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
-        !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId))) ||
-        !displayOrder || isNotValidInteger(Number(displayOrder) || Number.isNaN(Number(displayOrder))) ||
-        typeof isActive !== "boolean"){
+router.put("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { sectionId, productId } = req.params;
+        const { displayOrder, isActive } = req.body;
+        if (!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+            !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId))) ||
+            !displayOrder || isNotValidInteger(Number(displayOrder) || Number.isNaN(Number(displayOrder))) ||
+            typeof isActive !== "boolean") {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
-        if(!existSection){
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({ id: sectionId });
+        if (!existSection) {
             res.status(404).json({
                 status: false,
                 message: "找不到此推薦專區"
             })
             return
         }
-        const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
-        if(!existProduct){
+        const existProduct = await dataSource.getRepository("Products").findOneBy({ id: productId });
+        if (!existProduct) {
             res.status(404).json({
                 status: false,
                 message: "找不到此商品"
             })
             return
         }
-        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: productId});
-        if(!existRecommendationProduct){
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({ section_id: sectionId, product_id: productId });
+        if (!existRecommendationProduct) {
             res.status(404).json({
                 status: false,
                 message: "該推薦專區無此商品"
             })
             return
         }
-        if(existRecommendationProduct.display_order === displayOrder && existRecommendationProduct.is_active === isActive){
+        if (existRecommendationProduct.display_order === displayOrder && existRecommendationProduct.is_active === isActive) {
             res.status(200).json({
                 status: true,
                 message: "未變更專區商品資料"
@@ -2807,48 +2829,48 @@ router.put("/recommendations/:sectionId/products/:productId", verifyToken, verif
                 display_order: displayOrder,
                 is_active: isActive
             })
-            .where("section_id =:sectionId", {sectionId})
-            .andWhere("product_id =:productId", {productId})
+            .where("section_id =:sectionId", { sectionId })
+            .andWhere("product_id =:productId", { productId })
             .execute();
         res.status(200).json({
             status: true,
             message: "更新專區商品成功"
         })
-    }catch(error){
+    } catch (error) {
         logger.error('更新專區商品錯誤:', error);
         next(error);
     }
 })
 //刪除專區商品
-router.delete("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
-        const {sectionId, productId} = req.params;
-        if(!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
-        !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId)))){
+router.delete("/recommendations/:sectionId/products/:productId", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const { sectionId, productId } = req.params;
+        if (!sectionId || isNotValidInteger(Number(sectionId)) || Number.isNaN(Number(sectionId)) ||
+            !productId || isNotValidInteger(Number(productId) || Number.isNaN(Number(productId)))) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符"
             })
             return
         }
-        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({id: sectionId});
-        if(!existSection){
+        const existSection = await dataSource.getRepository("RecommendationSections").findOneBy({ id: sectionId });
+        if (!existSection) {
             res.status(404).json({
                 status: false,
                 message: "找不到此推薦專區"
             })
             return
         }
-        const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
-        if(!existProduct){
+        const existProduct = await dataSource.getRepository("Products").findOneBy({ id: productId });
+        if (!existProduct) {
             res.status(404).json({
                 status: false,
                 message: "找不到此商品"
             })
             return
         }
-        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({section_id: sectionId, product_id: productId});
-        if(!existRecommendationProduct){
+        const existRecommendationProduct = await dataSource.getRepository("RecommendationProducts").findOneBy({ section_id: sectionId, product_id: productId });
+        if (!existRecommendationProduct) {
             res.status(404).json({
                 status: false,
                 message: "該推薦專區無此商品"
@@ -2859,14 +2881,14 @@ router.delete("/recommendations/:sectionId/products/:productId", verifyToken, ve
             .createQueryBuilder()
             .delete()
             .from("RecommendationProducts")
-            .where("section_id =:sectionId", {sectionId})
-            .andWhere("product_id =:productId", {productId})
+            .where("section_id =:sectionId", { sectionId })
+            .andWhere("product_id =:productId", { productId })
             .execute();
         res.status(200).json({
             status: true,
             message: "刪除專區商品成功"
         })
-    }catch(error){
+    } catch (error) {
         logger.error('更新專區商品錯誤:', error);
         next(error);
     }
@@ -3322,5 +3344,24 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
         next(error);
     }
 })
+
+//取得年齡分類列表
+router.get("/ageRanges", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        const ageRanges = await dataSource
+            .getRepository("AgeRanges")
+            .find({ order: { id: "ASC" } }); // 依照 id 遞增排序
+
+        res.status(200).json({
+            status: true,
+            data: {
+                ageRanges
+            }
+        });
+    } catch (error) {
+        console.error("取得年齡列表錯誤:", error);
+        next(error);
+    }
+});
 
 module.exports = router;
