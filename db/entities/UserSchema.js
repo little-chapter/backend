@@ -75,12 +75,27 @@ module.exports = new EntitySchema({
       type: "timestamp",
       nullable: true,
     },
+    new_email: {
+      type: "varchar",
+      length: 255,
+      nullable: true,
+      unique: true
+    },
+    new_email_code: {
+      type: "varchar",
+      length: 6,
+      nullable: true
+    },
+    new_email_code_time:{
+      type: "timestamptz",
+      nullable: true,
+    },
     created_at: {
-      type: "timestamp",
+      type: "timestamptz",
       default: () => "CURRENT_TIMESTAMP",
     },
     updated_at: {
-      type: "timestamp",
+      type: "timestamptz",
       default: () => "CURRENT_TIMESTAMP",
       onUpdate: "CURRENT_TIMESTAMP",
     },

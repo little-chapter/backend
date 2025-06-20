@@ -69,10 +69,13 @@ module.exports = new EntitySchema({
             type: "integer",
             nullable: false,
         },
-        is_featured: {
-            type: "boolean",
+        category_id: {
+            type: "integer",
             nullable: false,
-            default: false,
+        },
+        introduction_html: {
+            type: "text",
+            nullable: true,
         },
         is_new_arrival: {
             type: "boolean",
@@ -94,13 +97,18 @@ module.exports = new EntitySchema({
             nullable: false,
             default: true,
         },
+        is_bundle:{
+            type: "boolean",
+            nullable: false,
+            default: false,
+        },
         created_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
         updated_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,
@@ -108,14 +116,24 @@ module.exports = new EntitySchema({
     },
     relations: {
         AgeRanges: {
-            target: 'AgeRanges',
-            type: 'one-to-many',
+            target: "AgeRanges",
+            type: "many-to-one",
             joinColumn: {
-                name: 'age_range_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'products_age_ranges_id_fk'
+                name: "age_range_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "products_age_ranges_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
+        Categories: {
+            target: "Categories",
+            type: "many-to-one",
+            joinColumn: {
+                name: "category_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "products_categories_id_fk"
+            },
+            onDelete:"RESTRICT"
+        }
     }
 })

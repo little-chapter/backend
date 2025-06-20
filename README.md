@@ -46,8 +46,139 @@
 
 ## API 路由
 
-- `/api/users` - 使用者註冊 API
-  - POST `/api/users/sign-up` - 使用者註冊
+### 使用者相關 (`/api/users`)
+
+- `POST /api/users/sign-up` - 使用者註冊
+- `POST /api/users/log-in` - 使用者登入
+- `GET /api/users/verify-email` - 電子郵件驗證
+- `POST /api/users/resend-verification` - 重新發送驗證郵件
+- `GET /api/users/profile` - 取得個人資料（需登入）
+- `PUT /api/users/profile` - 更新個人資料（需登入）
+- `POST /api/users/forgot-password` - 忘記密碼
+- `POST /api/users/verify-code` - 重設密碼驗證代碼
+- `POST /api/users/reset-password` - 重設密碼
+- `PUT /api/users/password` - 修改密碼（需登入）
+- `POST /api/users/email-change` - 申請變更電子郵件（需登入）
+- `POST /api/users/email-change/verify` - 驗證新電子郵件（需登入）
+- `POST /api/users/google-sign-in` - Google 登入
+
+### 商品相關 (`/api/products`)
+
+- `GET /api/products` - 取得商品列表
+- `GET /api/products/reviews` - 取得商品評價
+- `GET /api/products/:productId` - 取得指定商品詳細資料
+
+### 購物車相關 (`/api/cart`)
+
+- `GET /api/cart` - 取得購物車內容（需登入）
+- `POST /api/cart` - 新增商品至購物車（需登入）
+- `PUT /api/cart/:productId` - 修改購物車內商品數量（需登入）
+- `DELETE /api/cart/:productId` - 移除購物車內指定商品（需登入）
+- `DELETE /api/cart` - 清空購物車（需登入）
+
+### 訂單相關 (`/api/orders`)
+
+- `GET /api/orders` - 取得使用者訂單列表（需登入）
+- `GET /api/orders/:orderNumber` - 取得指定訂單詳細資料（需登入）
+- `POST /api/orders/action` - 訂單操作（取消訂單、退貨申請）（需登入）
+- `POST /api/orders/:orderNumber/products/:productId/reviews` - 新增商品評價（需登入）
+
+### 結帳相關 (`/api/checkout`)
+
+- `POST /api/checkout` - 處理結帳（需登入）
+
+### 金流相關 (`/api/payment`)
+
+- `POST /api/payment/return` - 付款回傳處理
+- `POST /api/payment/notify` - 付款通知處理
+
+### 願望清單相關 (`/api/wishlist`)
+
+- `GET /api/wishlist` - 取得願望清單（需登入）
+- `POST /api/wishlist` - 新增商品至願望清單（需登入）
+- `DELETE /api/wishlist/:productId` - 從願望清單移除商品（需登入）
+
+### 通知相關 (`/api/notifications`)
+
+- `GET /api/notifications` - 取得通知列表（需登入）
+- `PUT /api/notifications/read` - 標記通知為已讀（需登入）
+
+### 優惠券相關 (`/api/discountCodes`)
+
+- `GET /api/discountCodes` - 取得可用優惠券（需登入）
+- `POST /api/discountCodes/:code` - 使用優惠券（需登入）
+
+### 搜尋相關 (`/api/search`)
+
+- `GET /api/search` - 搜尋商品
+
+### 首頁相關 (`/api/homepage`)
+
+- `GET /api/homepage` - 取得首頁內容
+
+### AI 客服相關 (`/api/chat`)
+
+- `POST /api/chat` - AI 客服對話（限制請求頻率）
+
+### 檔案上傳相關
+
+- `POST /api/upload/avatar` - 上傳使用者頭像（需登入）
+
+### 管理者功能 (`/api/admin`)
+
+**需要管理員權限的 API**
+
+#### 管理者認證
+
+- `POST /api/admin/log-in` - 管理者登入
+- `GET /api/admin/profile` - 取得管理者個人資料
+
+#### 儀表板與統計
+
+- `GET /api/admin/dashboard` - 管理者儀表板
+- `GET /api/admin/task` - 取得待辦事項數量
+
+#### 使用者管理
+
+- `GET /api/admin/users` - 取得使用者列表
+- `GET /api/admin/users/:userId` - 取得特定使用者詳細資訊
+- `PUT /api/admin/users/:userId` - 更新特定使用者資訊
+
+#### 商品管理
+
+- `GET /api/admin/products` - 管理者取得商品列表
+- `GET /api/admin/products/:productId` - 管理者取得指定商品詳細資料
+- `POST /api/admin/products` - 新增商品
+- `PUT /api/admin/products/:productId` - 更新商品
+- `DELETE /api/admin/products/:productId` - 刪除商品
+- `POST /api/admin/products/:product_id/images` - 上傳商品圖片
+
+#### 商品分類管理
+
+- `GET /api/admin/categories` - 取得分類列表
+- `GET /api/admin/categories/:categoryId` - 取得類別詳細資訊
+- `POST /api/admin/categories` - 新增商品分類
+- `PUT /api/admin/categories/:categoryId` - 編輯商品分類
+- `DELETE /api/admin/categories/:categoryId` - 刪除商品分類
+
+#### 訂單管理
+
+- `GET /api/admin/orders` - 取得訂單列表
+- `GET /api/admin/orders/:orderNumber` - 取得指定訂單詳細資料
+- `POST /api/admin/orders/action` - 管理者訂單操作（出貨確認、退貨審核）
+
+#### 推薦專區管理
+
+- `GET /api/admin/recommendations/:sectionId/candidateProducts` - 取得專區候選商品
+- `GET /api/admin/recommendations/:sectionId/products` - 取得專區商品列表
+- `POST /api/admin/recommendations/:sectionId/products` - 新增專區商品
+- `PUT /api/admin/recommendations/:sectionId/products/:productId` - 更新專區商品
+- `DELETE /api/admin/recommendations/:sectionId/products/:productId` - 刪除專區商品
+
+#### 通知管理
+
+- `GET /api/admin/notifications` - 取得通知模板列表
+- `POST /api/admin/notifications` - 發送通知
 
 ## GitHub 協作流程
 

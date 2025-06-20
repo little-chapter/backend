@@ -28,20 +28,21 @@ module.exports = new EntitySchema({
         },
         title: {
             type: "varchar",
-            length: 255,
+            length: 10,
             nullable: false,
         },
         content: {
-            type: "text",
+            type: "varchar",
+            length: 100,
             nullable: false,
         },
         created_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
         updated_at: {
-            type: "timestamp",
+            type: "timestamptz",
             default: () => "CURRENT_TIMESTAMP",
             onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,
@@ -53,25 +54,35 @@ module.exports = new EntitySchema({
         },
     },
     relations: {
-        User: {
-            target: 'User',
-            type: 'one-to-many',
+        Products: {
+            target: "Products",
+            type: "many-to-one",
             joinColumn: {
-                name: 'user_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_reviews_user_id_fk'
+                name: "product_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_product_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
+        },
+        User: {
+            target: "User",
+            type: "many-to-one",
+            joinColumn: {
+                name: "user_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_user_id_fk"
+            },
+            onDelete:"RESTRICT"
         },
         OrderItems: {
-            target: 'OrderItems',
-            type: 'one-to-one',
+            target: "OrderItems",
+            type: "one-to-one",
             joinColumn: {
-                name: 'order_item_id',
-                referencedColumnName: 'id',
-                foreignKeyConstraintName: 'product_reviews_order_item_id_fk'
+                name: "order_item_id",
+                referencedColumnName: "id",
+                foreignKeyConstraintName: "product_reviews_order_item_id_fk"
             },
-            onDelete:'RESTRICT'
+            onDelete:"RESTRICT"
         },
     }
 })

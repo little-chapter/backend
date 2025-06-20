@@ -1,8 +1,8 @@
 const { EntitySchema } = require("typeorm");
 
 module.exports = new EntitySchema({
-    name: "Orders",
-    tableName: "orders",
+    name: "PendingOrders",
+    tableName: "pendingOrders",
     columns: {
         id: {
             type: "uuid",
@@ -20,10 +20,11 @@ module.exports = new EntitySchema({
             nullable: false,
             unique: true
         },
-        order_status: {
+        status: {
             type: "varchar",
             length: 20,
             nullable: false,
+            default: "pending",
         },
         total_amount: {
             type: "numeric",
@@ -76,11 +77,6 @@ module.exports = new EntitySchema({
             length: 10,
             nullable: true,
         },
-        shipping_status: {
-            type: "varchar",
-            length: 20,
-            nullable: false,
-        },
         shipping_method: {
             type: "varchar",
             length: 50,
@@ -88,7 +84,7 @@ module.exports = new EntitySchema({
         },
         shipping_address: {
             type: "text",
-            nullable: false,
+            nullable: true,
         },
         store_code: {
             type: "varchar",
@@ -105,48 +101,12 @@ module.exports = new EntitySchema({
             length: 50,
             nullable: true,
         },
-        payment_status:{
-            type: "varchar",
-            length: 20,
-            nullable: true,
-        },
         note:{
             type: "text",
             nullable: true,
         },
-        status_note:{
-            type: "text",
-            nullable: true,
-        },
-        tracking_number: {
-            type: "varchar",
-            length: 30,
-            nullable: true,
-        },
-        shipped_at: {
-            type: "timestamptz",
-            nullable: true,
-        },
-        completed_at: {
-            type: "timestamptz",
-            nullable: true,
-        },
-        cancelled_at: {
-            type: "timestamptz",
-            nullable: true,
-        },
-        return_reason: {
-            type: "varchar",
-            length: 100,
-            nullable: true,
-        },
-        reject_reason:{
-            type: "varchar",
-            length: 100,
-            nullable: true,
-        },
-        return_at: {
-            type: "timestamptz",
+        discount_code:{
+            type: "integer",
             nullable: true,
         },
         created_at: {
@@ -154,10 +114,8 @@ module.exports = new EntitySchema({
             default: () => "CURRENT_TIMESTAMP",
             nullable: false,
         },
-        updated_at: {
+        expired_at: {
             type: "timestamptz",
-            default: () => "CURRENT_TIMESTAMP",
-            onUpdate: "CURRENT_TIMESTAMP",
             nullable: false,
         },
     },
@@ -168,9 +126,8 @@ module.exports = new EntitySchema({
             joinColumn: {
                 name: "user_id",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "orders_user_id_fk"
-            },
-            onDelete:"RESTRICT"
+                foreignKeyConstraintName: "pending_orders_user_id_fk"
+            }
         },
     }
 })

@@ -1,8 +1,8 @@
 const { EntitySchema } = require("typeorm");
 
 module.exports = new EntitySchema({
-    name: "OrderItems",
-    tableName: "orderItems",
+    name: "PendingOrderItems",
+    tableName: "pendingOrderItems",
     columns: {
         id: {
             type: "integer",
@@ -10,7 +10,7 @@ module.exports = new EntitySchema({
             generated: "increment",
             nullable: false,
         },
-        order_id: {
+        pending_order_id: {
             type: "uuid",
             nullable: false,
         },
@@ -39,15 +39,9 @@ module.exports = new EntitySchema({
             scale: 2,
             nullable: false,
         },
-        is_reviewed: {
-            type: "boolean",
+        expired_at: {
+            type: "timestamptz",
             nullable: false,
-            default: false,
-        },
-        status_note: {
-            type: "varchar",
-            length: 255,
-            nullable: true,
         },
     },
     relations: {
@@ -57,19 +51,18 @@ module.exports = new EntitySchema({
             joinColumn: {
                 name: "product_id",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "order_items_product_id_fk"
+                foreignKeyConstraintName: "pending_order_items_product_id_fk"
             },
-            onDelete:"RESTRICT"
         },
-        Orders: {
-            target: "Orders",
+        PendingOrders: {
+            target: "PendingOrders",
             type: "many-to-one",
             joinColumn: {
-                name: "order_id",
+                name: "pending_order_id",
                 referencedColumnName: "id",
-                foreignKeyConstraintName: "order_items_order_id_fk"
+                foreignKeyConstraintName: "pending_order_items_order_id_fk"
             },
-            onDelete:"RESTRICT"
+            onDelete:"CASCADE"
         },
     }
 })

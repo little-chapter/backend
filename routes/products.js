@@ -4,28 +4,36 @@ const { dataSource } = require("../db/data-source");
 const logger = require('../utils/logger')('Products');
 const {isNotValidString, isNotValidInteger} = require("../utils/validUtils")
 
-const allowedFilters = {
-	page: "number",
-	limit: "number",
-	categoryId: "number",
-	ageRangeId: "number",
-	priceMin: "number",
-	priceMax: "number",
-    sortBy: "string",
-    sortOrder: "string",
-    author: "string",
-    publisher: "string",
-};
+function formatDateToYYYYMMDD(dateString){
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // 月份從 0 開始，所以要 + 1，並補零
+    const day = String(date.getDate()).padStart(2, "0"); // 補零
+    return `${year}-${month}-${day}`;
+}
+
 //取得篩選商品列表
 router.get("/", async(req, res, next)=>{
     try{
         const filters = req.query;
+        const allowedFilters = {
+            page: "number",
+            limit: "number",
+            categoryId: "number",
+            ageRangeId: "number",
+            priceMin: "number",
+            priceMax: "number",
+            sortBy: "string",
+            sortOrder: "string",
+            author: "string",
+            publisher: "string",
+        };
         // 確認網址參數與格式
         for (const key of Object.keys(filters)) {
             if (!(key in allowedFilters)) {
                 res.status(400).json({
                     status: false,
-                    message: `不支援的搜尋條件：${key}`,
+                    message: "不支援的搜尋條件",
                 });
                 return
             }
@@ -35,7 +43,7 @@ router.get("/", async(req, res, next)=>{
                 if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 ${key} 資料格式不符`,
+                        message: "欄位資料格式不符",
                     });
                     return
                 }
@@ -44,22 +52,33 @@ router.get("/", async(req, res, next)=>{
                 if(!value || isNotValidString(value)){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 ${key} 資料格式不符`,
+                        message: "欄位資料格式不符",
                     });
                     return
                 }
             }
         }
-        //撈取資料
         let productQuery = dataSource.getRepository("Products")
             .createQueryBuilder("products")
+            .innerJoin("products.AgeRanges", "ageRanges")
+            .innerJoin("products.Categories", "categories")
+            .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary =:isPrimary", {isPrimary: true})
             .select([
-                ("products.id AS id"),
-                ("products.title AS title"),
-                ("products.price AS price"),
-                ("products.discount_price AS discount_price"),
-                ("products.stock_quantity AS stock_quantity"),
-            ]);
+                "products.id AS id",
+                "products.title AS title",
+                "ageRanges.name AS age_range_name",
+                "categories.name AS categories_name",
+                "products.author AS author",
+                "products.publisher AS publisher",
+                "products.price AS price",
+                "products.discount_price AS discount_price",
+                "products.stock_quantity AS stock_quantity",
+                "image.image_url AS image_url",
+                "products.is_new_arrival AS is_new_arrival",
+                "products.is_bestseller AS is_bestseller",
+                "products.is_discount AS is_discount",
+            ])
+            .where("products.is_visible =:isVisible", {isVisible: true})
         if(filters.categoryId){
             const categoryId = Number(filters.categoryId);
             const existCategoryId = await dataSource.getRepository("Categories").findOneBy({id: categoryId})
@@ -71,9 +90,7 @@ router.get("/", async(req, res, next)=>{
                 return
             }
             productQuery = productQuery
-                .innerJoin("ProductLinkCategory", "plc", "plc.product_id = products.id")
-                .innerJoin("Categories", "categories", "plc.category_id = categories.id")
-                .andWhere("plc.category_id =:categoryId", {categoryId: categoryId});
+                .andWhere("categories.id =:categoryId", {categoryId: categoryId})
         }
         if(filters.ageRangeId){
             const ageRangeId = Number(filters.ageRangeId);
@@ -86,32 +103,28 @@ router.get("/", async(req, res, next)=>{
                 return
             }
             productQuery = productQuery
-                .innerJoin("AgeRanges", "ageRanges", "products.age_range_id = ageRanges.id")
-                .andWhere("products.age_range_id =:ageRangeId", {ageRangeId: ageRangeId});
+                .andWhere("ageRanges.id =:ageRangeId", {ageRangeId: ageRangeId})
         }
         if(filters.author){
             const author = String(filters.author);
             productQuery = productQuery
-                .andWhere("products.author ILIKE :author", {author: `%${author}%`});
+                .andWhere("products.author ILIKE :author", {author: `%${author}%`})
         }
         if(filters.publisher){
             const publisher = String(filters.publisher);
             productQuery = productQuery
-                .andWhere("products.publisher ILIKE :publisher", {publisher: `%${publisher}%`});
+                .andWhere("products.publisher ILIKE :publisher", {publisher: `%${publisher}%`})
         }
         if(filters.priceMin){
             const priceMin = Number(filters.priceMin);
             productQuery = productQuery
-                .andWhere("products.price >=:priceMin", {priceMin: priceMin});
+                .andWhere("products.price >=:priceMin", {priceMin: priceMin})
         }
         if(filters.priceMax){
             const priceMax = Number(filters.priceMax);
             productQuery = productQuery
-                .andWhere("products.price <=:priceMax", {priceMax: priceMax});
+                .andWhere("products.price <=:priceMax", {priceMax: priceMax})
         }
-        //篩選已上架商品
-        productQuery = productQuery
-            .andWhere("products.is_visible =:isVisible", {isVisible: true});
         //排序依據
         let sortOrder = "ASC";
         let sortBy = "publish_date"
@@ -125,7 +138,7 @@ router.get("/", async(req, res, next)=>{
             if(!(sortByStr in allowedSortOrder)){
                 res.status(400).json({
                     status: false,
-                    message: `不支援的搜尋條件： ${sortByStr}`
+                    message: `不支援的搜尋條件`
                 })
                 return
             }
@@ -136,7 +149,7 @@ router.get("/", async(req, res, next)=>{
                 if(!(order === "DESC" || order === "ASC")){
                     res.status(400).json({
                         status: false,
-                        message: `欄位 sortOrder 資料格式不符`
+                        message: `欄位資料格式不符`
                     })
                     return
                 }
@@ -148,7 +161,7 @@ router.get("/", async(req, res, next)=>{
                 if(!(order === "DESC" || order === "ASC")){
                     res.status(400).json({
                         status: false,
-                        message: "欄位 sortOrder 資料格式不符"
+                        message: "欄位資料格式不符"
                     })
                     return
                 }
@@ -157,69 +170,184 @@ router.get("/", async(req, res, next)=>{
         }
         productQuery = productQuery.orderBy(`products.${sortBy}`, sortOrder)
         //總筆數
-        const count = await productQuery.getCount();
-        //分頁
+        const countQuery = productQuery.clone();
+        const count = await countQuery.getCount();
+        // 分頁
         let page = 1;
-        let limit = 20;
-        if(filters.page){
-            const pageNum = Number(filters.page)
-            page = pageNum;
+        let limit = 12;
+        if(filters.page && Number(filters.page) > 1){
+            page = Number(filters.page);
         }
-        if(filters.limit){
-            const limitNum = Number(filters.limit)
-            limit = limitNum;
+        if(filters.limit && Number(filters.limit) >= 1){
+            limit = Number(filters.limit)
+        }
+        let totalPages = Math.max(1, Math.ceil(count / limit)); //總頁數至少為1
+        if(page > totalPages){
+            page = totalPages
         }
         const skip = (page - 1) * limit;
-        const productsData = await productQuery.skip(skip).take(limit).getRawMany();
-        //取得商品主要圖片
-        async function processProducts(productsData){
-            const productsResult = productsData.map(async (product) =>{
-                const imageUrl = await dataSource.getRepository("ProductImages").findOne({
-                    select: ["image_url"],
-                    where: {
-                        product_id: product.id,
-                        is_primary: true,
-                    }
-                })
-                if(imageUrl){
-                    product.imageUrl = imageUrl.image_url;
-                }else{
-                    product.imageUrl = null;
-                }
-                return {
-                            productId: product.id,
-                            title: product.title,
-                            price: product.price,
-                            discountPrice: product.discount_price,
-                            imageUrl: product.imageUrl,
-                            stockQuantity: product.stock_quantity
-                        }
-            });
-            const resolvedProducts = await Promise.all(productsResult)
-            return resolvedProducts
-        }
-        processProducts(productsData)
-            .then(data =>{
-                res.status(200).json({
-                    status: true,
-                    data: {
-                        pagination:{
-                            page: page,
-                            limit: limit,
-                            total: count,
-                            totalPages: Math.ceil(count / limit),
-                        },
-                        products: data
-                        
-                    }
-                })
-            })
-            .catch(error =>{
-                logger.error('取得商品主要圖片錯誤:', error);
-                next(error);
-            })
+        const productsData = await productQuery
+            .offset(skip)
+            .limit(limit)
+            .getRawMany();
+        const productsResult = productsData.map(product =>{
+            return {
+                productId: product.id,
+                title: product.title,
+                ageRangeName: product.age_range_name,
+                categoryName: product.categories_name,
+                author: product.author,
+                publisher: product.publisher,
+                price: parseInt(product.price),
+                discountPrice: parseInt(product.discount_price),
+                stockQuantity: parseInt(product.stock_quantity),
+                imageUrl: product.image_url,
+                isNewArrival: product.is_new_arrival,
+                isBestseller: product.is_bestseller,
+                isDiscount: product.is_discount,
+                quantity: 1,
+            }
+        })
+        res.status(200).json({
+            status: true,
+            data: {
+                pagination:{
+                    page: page,
+                    limit: limit,
+                    total: count,
+                    totalPages: totalPages,
+                },
+                products: productsResult
+            }
+        })
     } catch (error) {
         logger.error('取得商品列表錯誤:', error);
+        next(error);
+    }
+})
+//取得商品評價
+router.get("/reviews", async(req, res, next)=>{
+    try{
+        let {productId} = req.query;
+        if(!productId){
+            //撈所有評價
+            const productReviews = await dataSource.getRepository("ProductReviews")
+                .createQueryBuilder("pr")
+                .innerJoin("pr.OrderItems", "orderItems")
+                .innerJoin("pr.User", "user")
+                .innerJoin("orderItems.Products", "products", "products.is_visible =:isVisible", {isVisible: true})
+                .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary = :isPrimary", { isPrimary: true })
+                .select([
+                    "products.id AS pid",
+                    "products.title AS title",
+                    "image.image_url AS image_url",
+                    "pr.content AS content",
+                    "pr.rating AS rating",
+                    "user.name AS username",
+                    "user.avatar AS avatar",
+                    "pr.created_at AS created_at"
+                ])
+                .orderBy("pr.created_at", "ASC")
+                .getRawMany();
+            const reviewsResult = productReviews.map(review =>{
+                return {
+                    productId: review.pid,
+                    productTitle: review.title,
+                    productImageUrl: review.image_url,
+                    content: review.content,
+                    rating: review.rating,
+                    username: review.username,
+                    userAvatar: review.avatar,
+                    createdAt: formatDateToYYYYMMDD(review.created_at)
+                }
+            });
+            let count = 0;
+            let averageRating = 0;
+            if(reviewsResult.length !== 0){
+                count = reviewsResult.length;
+                let totalRatings = 0;
+                reviewsResult.forEach(review =>{
+                    totalRatings += review.rating;
+                })
+                averageRating = totalRatings / count;
+            }
+            res.status(200).json({
+                status: true,
+                data: {
+                    averageRating: averageRating,
+                    reviewCount: count,
+                    reviews: reviewsResult
+                }
+            })
+        }else{
+            productId = Number(productId);
+            if(isNotValidInteger(productId) || Number.isNaN(productId)){
+                res.status(400).json({
+                    status: false,
+                    message: "欄位資料不符合格式"
+                })
+                return
+            }
+            const existProduct = await dataSource.getRepository("Products").findOneBy({id: productId});
+            if(!existProduct){
+                res.status(404).json({
+                    status: false,
+                    message: "找不到此商品"
+                })
+                return
+            }
+            const productReviews = await dataSource.getRepository("ProductReviews")
+                .createQueryBuilder("pr")
+                .innerJoin("pr.OrderItems", "orderItems")
+                .innerJoin("pr.User", "user")
+                .innerJoin("orderItems.Products", "products", "products.is_visible =:isVisible", {isVisible: true})
+                .leftJoin("ProductImages", "image", "image.product_id = products.id AND image.is_primary = :isPrimary", { isPrimary: true })
+                .select([
+                    "products.id AS pid",
+                    "products.title AS title",
+                    "image.image_url AS image_url",
+                    "pr.content AS content",
+                    "pr.rating AS rating",
+                    "user.name AS username",
+                    "user.avatar AS avatar",
+                    "pr.created_at AS created_at"
+                ])
+                .where("products.id =:productId", {productId: productId})
+                .orderBy("pr.created_at", "ASC")
+                .getRawMany();
+            const reviewsResult = productReviews.map(review =>{
+                return {
+                    productId: review.pid,
+                    productTitle: review.title,
+                    productImageUrl: review.image_url,
+                    content: review.content,
+                    rating: review.rating,
+                    username: review.username,
+                    userAvatar: review.avatar,
+                    createdAt: formatDateToYYYYMMDD(review.created_at)
+                }
+            });
+            let count = 0;
+            let averageRating = 0;
+            if(reviewsResult.length !== 0){
+                count = reviewsResult.length;
+                let totalRatings = 0;
+                reviewsResult.forEach(review =>{
+                    totalRatings += review.rating;
+                })
+                averageRating = totalRatings / count;
+            }
+            res.status(200).json({
+                status: true,
+                data: {
+                    averageRating: averageRating,
+                    reviewCount: count,
+                    reviews: reviewsResult
+                }
+            })
+        }
+    }catch(error){
+        logger.error('取得評價列表錯誤:', error);
         next(error);
     }
 })
@@ -237,14 +365,27 @@ router.get("/:productId", async(req, res, next)=>{
         }
         const existProduct = await dataSource.getRepository("Products")
             .createQueryBuilder("products")
-            .innerJoin("AgeRanges", "ageRanges", "ageRanges.id = products.age_range_id")
+            .where("products.id =:productId", {productId: productId})
+            .getExists();
+        if(!existProduct){
+            res.status(404).json({
+                status: false,
+                message: "找不到此商品"
+            })
+            return
+        }
+        const productData = await dataSource.getRepository("Products")
+            .createQueryBuilder("products")
+            .innerJoin("products.AgeRanges", "ageRanges")
+            .innerJoin("products.Categories", "categories")
             .select([
                 "products.id AS id",
                 "products.title AS title",
-                "products.description AS description",
                 "products.price AS price",
                 "products.discount_price AS discount_price",
                 "products.stock_quantity AS stock_quantity",
+                "categories.id AS categories_id",
+                "categories.name AS categories_name",
                 "products.age_range_id AS age_range_id",
                 "ageRanges.name AS age_range_name",
                 "products.isbn AS isbn",
@@ -253,82 +394,51 @@ router.get("/:productId", async(req, res, next)=>{
                 "products.publisher AS publisher",
                 "products.publish_date AS publish_date",
                 "products.page_count AS page_count",
+                "products.introduction_html AS introduction_html",
             ])
             .where("products.id =:productId", {productId: productId})
             .getRawOne();
-        if(!existProduct){
-            res.status(404).json({
-                status: false,
-                message: "找不到此商品"
-            })
-            return
-        }
         // 取得商品圖片
         const allImages = await dataSource.getRepository("ProductImages")
             .createQueryBuilder("images")
             .select([
-                "images.image_url AS image_url",
+                "image_url",
+                "is_primary"
             ])
-            .where("images.product_id =:productId", {productId: existProduct.id})
+            .where("product_id =:productId", {productId: productData.id})
             .orderBy("display_order")
-            .getRawMany()
-        if (allImages){
-            const productImages = allImages.map(image =>{
-                return image.image_url
-            })
-            existProduct.imageUrls = productImages;
-        }else{
-            existProduct.imageUrls = null;
-        }
-        //取得商品關聯主題
-        const categories = await dataSource.getRepository("ProductLinkCategory")
-            .createQueryBuilder("plc")
-            .innerJoin("Categories", "categories", "categories.id = plc.category_id")
-            .select([
-                "categories.id AS id",
-                "categories.name AS name",
-            ])
-            .where("plc.product_id =:productId", {productId: existProduct.id})
-            .getRawMany()
-        //取得商品評價次數 平均評價
-        let count = 0;
-        let averageRating = 0;
-        const reviews = await dataSource.getRepository("ProductReviews")
-            .createQueryBuilder("reviews")
-            .select([
-                "COUNT(reviews.id) AS count",
-                "SUM(reviews.rating) AS ratings",
-            ])
-            .where("reviews.product_id =:productId", {productId: existProduct.id})
-            .groupBy(["reviews.product_id"])
-            .getRawMany()
-        if(reviews.length !== 0){
-            count = reviews[0].count;
-            averageRating = reviews[0].ratings / count;
-        }
+            .getRawMany();
+        const productImages = allImages.map(image =>{
+            return {
+                imageUrl: image.image_url,
+                isPrimary: image.is_primary
+            }
+        })
         res.status(200).json({
             status: true,
             data: {
-                productId: existProduct.id,
-                title: existProduct.title,
-                description: existProduct.description,
-                price: existProduct.price,
-                discountPrice: existProduct.discount_price,
-                stockQuantity: existProduct.stock_quantity,
-                categoryInfo: categories,
-                ageRange: {
-                    categoryId: existProduct.age_range_id,
-                    name: existProduct.age_range_name
+                productId: productData.id,
+                title: productData.title,
+                price: parseInt(productData.price),
+                discountPrice: parseInt(productData.discount_price),
+                stockQuantity: productData.stock_quantity,
+                categoryInfo: {
+                    id: productData.categories_id,
+                    name: productData.categories_name
                 },
-                imageUrls: existProduct.imageUrls,
-                isbn: existProduct.isbn,
-                author: existProduct.author,
-                illustrator: existProduct.illustrator,
-                publisher: existProduct.publisher,
-                publishDate: existProduct.publish_date,
-                pageCount: existProduct.page_count,
-                averageRating: averageRating,
-                reviewCount: count
+                ageRange: {
+                    id: productData.age_range_id,
+                    name: productData.age_range_name
+                },
+                imageUrls: productImages,
+                author: productData.author,
+                illustrator: productData.illustrator,
+                publisher: productData.publisher,
+                publishDate: formatDateToYYYYMMDD(productData.publish_date),
+                isbn: productData.isbn,
+                pageCount: productData.page_count,
+                introductionHtml: productData.introduction_html,
+                quantity: 1
             }
         })
     }catch(error){
