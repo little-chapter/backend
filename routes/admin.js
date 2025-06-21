@@ -2130,7 +2130,7 @@ router.post("/orders/action", verifyToken, verifyAdmin, async (req, res, next) =
                     .createQueryBuilder()
                     .update()
                     .set({
-                        order_status: type,
+                        order_status: type === "approveReturn" ? "returnAccepted" : "returnRejected",
                         reject_reason: type === "rejectReturn" ? rejectReason : null
                     })
                     .where("order_number =:orderNumber", { orderNumber: orderNumber })
