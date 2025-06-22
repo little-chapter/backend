@@ -622,7 +622,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             if (isNotValidString(introductionHtml) || introductionHtml.length < 3) {
                 res.status(400).json({
                     "status": false,
-                    "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
+                    "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元）"
                 });
                 return;
             }
@@ -954,7 +954,7 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             if (isNotValidString(introductionHtml) || introductionHtml.length < 3) {
                 res.status(400).json({
                     "status": false,
-                    "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
+                    "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元）"
                 });
                 return;
             }
