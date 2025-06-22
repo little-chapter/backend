@@ -619,7 +619,7 @@ router.put("/products/:productId", verifyToken, verifyAdmin, async (req, res, ne
             }
         }
         if (introductionHtml !== null) {
-            if (isNotValidString(introductionHtml) || introductionHtml.length < 3 || introductionHtml.length > 200) {
+            if (isNotValidString(introductionHtml) || introductionHtml.length < 3) {
                 res.status(400).json({
                     "status": false,
                     "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
@@ -951,7 +951,7 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
             }
         }
         if (introductionHtml) {
-            if (isNotValidString(introductionHtml) || introductionHtml.length < 3 || introductionHtml.length > 200) {
+            if (isNotValidString(introductionHtml) || introductionHtml.length < 3) {
                 res.status(400).json({
                     "status": false,
                     "message": "introductionHtml 必須為有效的 html 格式（至少 3 個字元，最多 200 字元）"
@@ -1029,7 +1029,10 @@ router.post("/products", verifyToken, verifyAdmin, async (req, res, next) => {
         await productsRepo.save(createProduct);
         res.status(201).json({
             "status": true,
-            "message": "商品新增成功"
+            "message": "商品新增成功",
+            data: {
+                id: createProduct.id
+            }
         });
     } catch (error) {
         logger.error("新增商品失敗:", error);
@@ -1837,7 +1840,7 @@ router.get("/orders", verifyToken, verifyAdmin, async (req, res, next) => {
                 "order_id",
                 "payment_time"
             ])
-            .where("order_id IN (:...ids)", {ids: orderIds})
+            .where("order_id IN (:...ids)", { ids: orderIds })
             .getRawMany();
         const ordersResult = ordersData.map(order => {
             const id = order.id;
@@ -2548,8 +2551,8 @@ router.get("/recommendations/:sectionId/candidateProducts", verifyToken, verifyA
                     "publish_date",
                     "is_bundle"
                 ])
-                .where("is_visible =:isVisible", {isVisible: true})
-                .andWhere("is_bundle =:isBundle", {isBundle: true})
+                .where("is_visible =:isVisible", { isVisible: true })
+                .andWhere("is_bundle =:isBundle", { isBundle: true })
                 .orderBy("id", "ASC")
                 .getRawMany();
             const result = productsData.map(item => {
@@ -2892,8 +2895,8 @@ router.delete("/recommendations/:sectionId/products/:productId", verifyToken, ve
     }
 })
 //取得通知列表
-router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
+router.get("/notifications", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
         //取得網址參數
         const filters = req.query;
         const allowedFilters = {
@@ -2902,8 +2905,8 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             isBroadcast: "boolean",
             notificationType: "string",
         }
-        for(const key of Object.keys(filters)){
-            if(!(key in allowedFilters)){
+        for (const key of Object.keys(filters)) {
+            if (!(key in allowedFilters)) {
                 res.status(400).json({
                     status: false,
                     message: "不支援的搜尋條件"
@@ -2912,8 +2915,8 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             }
             const expectedType = allowedFilters[key];
             const value = filters[key];
-            if(expectedType === "number"){
-                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+            if (expectedType === "number") {
+                if (!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -2921,8 +2924,8 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                     return
                 }
             }
-            if(expectedType === "number"){
-                if(!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))){
+            if (expectedType === "number") {
+                if (!value || isNotValidInteger(Number(value)) || Number.isNaN(Number(value))) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -2930,8 +2933,8 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                     return
                 }
             }
-            if(expectedType === "boolean"){
-                if(!value || !(value === "true" || value === "false")){
+            if (expectedType === "boolean") {
+                if (!value || !(value === "true" || value === "false")) {
                     res.status(400).json({
                         status: false,
                         message: "欄位資料格式不符",
@@ -2942,15 +2945,15 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
         }
         let templateQuery = dataSource.getRepository("NotificationTemplates")
             .createQueryBuilder("template")
-        if(filters.isBroadcast){
+        if (filters.isBroadcast) {
             const isBroadcast = filters.isBroadcast === "true" ? true : false;
             templateQuery = templateQuery
-                .andWhere("is_broadcast =:isBroadcast", {isBroadcast})
+                .andWhere("is_broadcast =:isBroadcast", { isBroadcast })
         }
-        if(filters.notificationType){
+        if (filters.notificationType) {
             const type = filters.notificationType;
             templateQuery = templateQuery
-                .andWhere("notification_type =:notificationType", {notificationType: type})
+                .andWhere("notification_type =:notificationType", { notificationType: type })
         }
         templateQuery = templateQuery
             .orderBy("created_at", "DESC")
@@ -2958,14 +2961,14 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
         const count = await countQuery.getCount();
         let page = 1;
         let limit = 5;
-        if(filters.page && Number(filters.page) > 1){
+        if (filters.page && Number(filters.page) > 1) {
             page = Number(filters.page);
         }
-        if(filters.limit && Number(filters.limit) >= 1){
+        if (filters.limit && Number(filters.limit) >= 1) {
             limit = Number(filters.limit)
         }
         let totalPages = Math.max(1, Math.ceil(count / limit));
-        if(page > totalPages){
+        if (page > totalPages) {
             page = totalPages
         }
         const skip = (page - 1) * limit;
@@ -2973,7 +2976,7 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             .offset(skip)
             .limit(limit)
             .getMany();
-        if(templateData.length === 0){
+        if (templateData.length === 0) {
             res.status(200).json({
                 status: true,
                 data: {
@@ -2995,14 +2998,14 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 "template_id",
                 "user_id"
             ])
-            .where("template_id IN(:...ids)", {ids: templateIds})
+            .where("template_id IN(:...ids)", { ids: templateIds })
             .getRawMany();
-        const templateResult = templateData.map(template =>{
+        const templateResult = templateData.map(template => {
             const templateId = template.id;
             template.targetUsers = [];
-            targetUsersData.forEach(user =>{
-                if(user.template_id === templateId){
-                    template.targetUsers.push(user.user_id); 
+            targetUsersData.forEach(user => {
+                if (user.template_id === templateId) {
+                    template.targetUsers.push(user.user_id);
                 }
             })
             return {
@@ -3030,59 +3033,59 @@ router.get("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 notifications: templateResult
             }
         })
-    }catch(error){
+    } catch (error) {
         logger.error('取得通知列表錯誤:', error);
         next(error);
     }
 })
 //發送通知
-router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
-    try{
+router.post("/notifications", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
         const allowedTypes = [
             "system",
             "order",
             "event",
         ]
         //取得管理者ID
-        const {id} = req.user;
-        const {title, content, notificationType, linkUrl, isBroadcast, scheduledAt, targetUserIds} = req.body;
+        const { id } = req.user;
+        const { title, content, notificationType, linkUrl, isBroadcast, scheduledAt, targetUserIds } = req.body;
         //必填
-        if(!title || !content || !notificationType || !id){
+        if (!title || !content || !notificationType || !id) {
             res.status(400).json({
                 status: false,
                 message: "通知標題、通知內容、通知類型為必填欄位",
             });
             return
         }
-        if(!allowedTypes.includes(notificationType)|| typeof isBroadcast !== "boolean" || !validator.isUUID(id)){
+        if (!allowedTypes.includes(notificationType) || typeof isBroadcast !== "boolean" || !validator.isUUID(id)) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
             });
             return
         }
-        if(linkUrl && !linkUrl.startsWith("/")){
+        if (linkUrl && !linkUrl.startsWith("/")) {
             res.status(400).json({
                 status: false,
                 message: "欄位資料格式不符",
             });
             return
         }
-        if(scheduledAt){
+        if (scheduledAt) {
             const scheduledDate = scheduledAt.slice(0, 10);
             const scheduledTime = scheduledAt.slice(11);
-            if(!validator.isDate(scheduledDate) || !validator.isTime(scheduledTime) || new Date(scheduledAt) <= new Date()){
+            if (!validator.isDate(scheduledDate) || !validator.isTime(scheduledTime) || new Date(scheduledAt) <= new Date()) {
                 res.status(400).json({
                     status: false,
                     message: "排程時間不符規則",
                 });
                 return
             }
-            
+
         }
         //非全體廣播 需檢查targetUserIds
-        if(isBroadcast === false){
-            if(targetUserIds.length === 0){
+        if (isBroadcast === false) {
+            if (targetUserIds.length === 0) {
                 res.status(400).json({
                     status: false,
                     message: "非全體廣播時，發送對象為必填",
@@ -3090,7 +3093,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 return
             }
             const validUserIds = targetUserIds.find(userId => !validator.isUUID(userId))
-            if(validUserIds){
+            if (validUserIds) {
                 res.status(400).json({
                     status: false,
                     message: "欄位資料格式不符",
@@ -3098,16 +3101,16 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 return
             }
             const invalidUserIds = [];
-            for(const userId of targetUserIds){
+            for (const userId of targetUserIds) {
                 const existUser = await dataSource.getRepository("User")
                     .createQueryBuilder()
-                    .where("id =:id", {id: userId})
+                    .where("id =:id", { id: userId })
                     .getExists();
-                if(!existUser){
+                if (!existUser) {
                     invalidUserIds.push(userId);
                 }
             }
-            if(invalidUserIds.length !== 0){
+            if (invalidUserIds.length !== 0) {
                 res.status(404).json({
                     status: false,
                     message: "找不到使用者",
@@ -3117,7 +3120,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             }
         }
         //全體廣播
-        if(isBroadcast === true){
+        if (isBroadcast === true) {
             //接收對象為有效user
             const users = await dataSource.getRepository("User").find({
                 select: [
@@ -3129,9 +3132,9 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             });
             const userIds = users.map(user => user.id)
             //要排程
-            if(scheduledAt){
+            if (scheduledAt) {
                 //建立模板
-                await dataSource.transaction(async(transactionalEntityManager) => {
+                await dataSource.transaction(async (transactionalEntityManager) => {
                     const newTemplate = await transactionalEntityManager
                         .getRepository("NotificationTemplates")
                         .createQueryBuilder()
@@ -3146,16 +3149,16 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                             created_by: id
                         })
                         .execute();
-                    if(newTemplate.identifiers.length === 0){
+                    if (newTemplate.identifiers.length === 0) {
                         res.status(422).json({
-                            status:false,
+                            status: false,
                             message: "建立通知失敗"
                         })
                         return
                     }
                     const templateId = newTemplate.identifiers[0].id;
                     //建立接收對象
-                    for(const userId of userIds){
+                    for (const userId of userIds) {
                         await transactionalEntityManager
                             .getRepository("TemplateTargetUsers")
                             .createQueryBuilder()
@@ -3174,7 +3177,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 })
             }
             //無排程 建立模板
-            await dataSource.transaction(async(transactionalEntityManager) => {
+            await dataSource.transaction(async (transactionalEntityManager) => {
                 const newTemplate = await transactionalEntityManager
                     .getRepository("NotificationTemplates")
                     .createQueryBuilder()
@@ -3189,16 +3192,16 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                         created_by: id
                     })
                     .execute();
-                if(newTemplate.identifiers.length === 0){
+                if (newTemplate.identifiers.length === 0) {
                     res.status(422).json({
-                        status:false,
+                        status: false,
                         message: "建立通知失敗"
                     })
                     return
                 }
                 const templateId = newTemplate.identifiers[0].id;
                 //建立接收對象
-                for(const userId of userIds){
+                for (const userId of userIds) {
                     await transactionalEntityManager
                         .getRepository("TemplateTargetUsers")
                         .createQueryBuilder()
@@ -3210,7 +3213,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                         .execute();
                 }
                 //建立用戶個人通知
-                for(const userId of userIds){
+                for (const userId of userIds) {
                     await transactionalEntityManager
                         .getRepository("Notifications")
                         .createQueryBuilder()
@@ -3234,11 +3237,11 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
             })
         }
         //非廣播=特定用戶targetUserIds
-        if(isBroadcast === false){
+        if (isBroadcast === false) {
             //有排程
-            if(scheduledAt){
+            if (scheduledAt) {
                 //建立模板
-                await dataSource.transaction(async(transactionalEntityManager) => {
+                await dataSource.transaction(async (transactionalEntityManager) => {
                     const newTemplate = await transactionalEntityManager
                         .getRepository("NotificationTemplates")
                         .createQueryBuilder()
@@ -3252,16 +3255,16 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                             created_by: id
                         })
                         .execute();
-                    if(newTemplate.identifiers.length === 0){
+                    if (newTemplate.identifiers.length === 0) {
                         res.status(422).json({
-                            status:false,
+                            status: false,
                             message: "建立通知失敗"
                         })
                         return
                     }
                     const templateId = newTemplate.identifiers[0].id;
                     //建立接收對象
-                    for(const userId of targetUserIds){
+                    for (const userId of targetUserIds) {
                         await transactionalEntityManager
                             .getRepository("TemplateTargetUsers")
                             .createQueryBuilder()
@@ -3280,7 +3283,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 })
             }
             //無排程 建立模板
-            await dataSource.transaction(async(transactionalEntityManager) => {
+            await dataSource.transaction(async (transactionalEntityManager) => {
                 const newTemplate = await transactionalEntityManager
                     .getRepository("NotificationTemplates")
                     .createQueryBuilder()
@@ -3294,16 +3297,16 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                         created_by: id
                     })
                     .execute();
-                if(newTemplate.identifiers.length === 0){
+                if (newTemplate.identifiers.length === 0) {
                     res.status(422).json({
-                        status:false,
+                        status: false,
                         message: "建立通知失敗"
                     })
                     return
                 }
                 const templateId = newTemplate.identifiers[0].id;
                 //建立接收對象
-                for(const userId of targetUserIds){
+                for (const userId of targetUserIds) {
                     await transactionalEntityManager
                         .getRepository("TemplateTargetUsers")
                         .createQueryBuilder()
@@ -3315,7 +3318,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                         .execute();
                 }
                 //建立用戶個人通知
-                for(const userId of targetUserIds){
+                for (const userId of targetUserIds) {
                     await transactionalEntityManager
                         .getRepository("Notifications")
                         .createQueryBuilder()
@@ -3337,7 +3340,7 @@ router.post("/notifications", verifyToken, verifyAdmin, async(req, res, next)=>{
                 })
             })
         }
-    }catch(error){
+    } catch (error) {
         logger.error('發送通知錯誤:', error);
         next(error);
     }
