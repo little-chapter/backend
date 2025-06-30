@@ -198,7 +198,7 @@ router.get("/task", verifyToken, verifyAdmin, async (req, res, next) => {
             where: { "order_status": "pending" }
         });
         const countReturn = await ordersRepo.count({
-            where: { "shipping_status": "returned" }
+            where: { "order_status": "returnRequested" }
         });
 
         res.status(200).json({
