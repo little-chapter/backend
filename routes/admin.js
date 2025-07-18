@@ -2908,4 +2908,50 @@ router.get("/ageRanges", verifyToken, verifyAdmin, async (req, res, next) => {
     }
 });
 
+// 取得折扣碼列表
+router.get("/discount-codes", verifyToken, verifyAdmin, async (req, res, next) => {
+    try {
+        let { page = 1, limit = 20 } = req.query;
+        page = Number(page);
+        limit = Number(limit);
+        const skip = (page - 1) * limit;
+
+        const discountRepo = dataSource.getRepository("discountCodes");
+
+        const [result, total] = await discountRepo
+            .createQueryBuilder("discount")
+            .orderBy("discount.start_date", "DESC")
+            .skip(skip)
+            .take(limit)
+            .getManyAndCount();
+
+        res.status(200).json({
+            message: "成功取得折扣碼清單",
+            status: true,
+            data: result.map((item) => ({
+                id: item.id,
+                code: item.code,
+                description: item.description,
+                type: item.discount_type, // 'fixed' or 'percentage'
+                value: Number(item.discount_value),
+                valid_from: item.start_date,
+                valid_until: item.end_date,
+                is_active: item.is_active
+            })),
+            pagination: {
+                total,
+                page,
+                limit
+            }
+        });
+
+    } catch (err) {
+        console.error("❌ 取得折扣碼清單失敗：", err);
+        res.status(500).json({
+            message: "伺服器錯誤，請稍後再試",
+            status: false
+        });
+    }
+});
+
 module.exports = router;
